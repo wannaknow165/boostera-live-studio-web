@@ -66,3 +66,11 @@ test('HTTP panel grants a session, API requires it, arbitrary RPC is not exposed
     assert.equal((await call('/../../package.json',{cookie})).status,404);
   }finally{await new Promise(resolve=>app.server.close(resolve));}
 });
+
+test('a phone room mismatch disables outgoing invitation state without hiding Studio state',async()=>{
+  const service={close(){},async state(name,key){if(key==='snapshot')return snapshot;if(key==='providerReady')return true;if(key==='linkedUsers')return [];}};
+  const phoneLink={async assertRoom(){throw Object.assign(new Error('mismatch'),{code:'PHONE_ROOM_NOT_ATTACHED_TO_STUDIO'});}};
+  const app=createApp({service,phoneLink,polling:false,nativeUi:{async inspect(){return{ready:true};}}});
+  try{await app.poll();assert.equal(app.getState().connected,true);assert.equal(app.getState().actions.invite,false);assert.equal(app.getState().actions.reason,'PHONE_ROOM_NOT_ATTACHED_TO_STUDIO');}
+  finally{app.server.emit('close');}
+});

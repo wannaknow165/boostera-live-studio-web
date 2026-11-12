@@ -44,6 +44,8 @@ Copy example configuration only during initial setup; retain existing local conf
 
 The mobile app includes camera/microphone capture, tracked overlays, customers, recipes, automation rules, recording, a processed stream viewer and optional provider-backed video jobs. Public TikTok event reception uses `tiktok-live-connector`. Creating a TikTok LIVE room, account invitations and battle-start operations are unavailable in the mobile app. Local RTMP video/audio works without LIVE Studio when an active destination is supplied; encoder output does not establish public TikTok visibility or battle control. See the [standalone audit](docs/STANDALONE-AUDIT.md).
 
+The existing BOOSTERA Android key-creation app can supply its encrypted local room handoff to the browser panel. The new phone card imports that destination into the existing mobile gateway without starting capture or a broadcast. Native invitations and Match controls require Studio to own the same room. See [Android room connection and test results](docs/PHONE-LINK.md).
+
 ## Source and media
 
 The full application code, current frontend, tests, builder utilities, effect definitions and selected generic runtime assets are included. Existing application directories were preserved rather than rebuilt.
@@ -70,6 +72,7 @@ These tests do not prove a real TikTok broadcast, successful delivery of a Co-ho
 
 - [מדריך קצר בעברית](docs/README-HE.md)
 - [Studio connection and limits](docs/STUDIO.md)
+- [Android room connection and test results](docs/PHONE-LINK.md)
 - [Mobile app guide](server-integration/wanna-studio-server/MOBILE.md)
 - [Effects server and APIs](server-integration/wanna-studio-server/README.md)
 - [Studio upstream configuration](server-integration/wanna-studio-server/STUDIO-CONNECT.md)

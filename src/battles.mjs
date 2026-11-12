@@ -69,11 +69,12 @@ export class NativeBattleUi extends NativeUi {
 }
 
 export class BattleController {
-  constructor({service,ui=new NativeBattleUi(),now=Date.now}){
-    Object.assign(this,{service,ui,now});this.requests=new Map();this.revisions=new Map();this.active=false;
+  constructor({service,ui=new NativeBattleUi(),now=Date.now,roomGuard=async()=>{}}){
+    Object.assign(this,{service,ui,now,roomGuard});this.requests=new Map();this.revisions=new Map();this.active=false;
   }
   async inspect(){
     const before=await this.service.state('interactionConnection','snapshot');
+    await this.roomGuard(before?.session?.roomId||'');
     if(before?.health!=='ready'||!before.session?.epoch||!before.session?.roomId)throw new InviteError('STUDIO_NOT_READY');
     const native=await this.ui.inspect();
     const after=await this.service.state('interactionConnection','snapshot');

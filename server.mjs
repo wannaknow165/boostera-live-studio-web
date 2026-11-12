@@ -3,12 +3,14 @@ import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import os from 'node:os';
 import {spawn} from 'node:child_process';
 import {RpcClient} from './src/rpc.mjs';
 import {normalizeSnapshot,summarizeChanges} from './src/model.mjs';
 import {NativeUi} from './src/native-ui.mjs';
 import {InviteController} from './src/invites.mjs';
 import {BattleController,NativeBattleUi} from './src/battles.mjs';
+import {PhoneLink} from './src/phone-link.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
 const assets=new Map([['/',['index.html','text/html; charset=utf-8']],['/app.js',['app.js','text/javascript; charset=utf-8']],['/style.css',['style.css','text/css; charset=utf-8']]]);
 export function requestAllowed(req,port,token,api=true){
@@ -19,14 +21,15 @@ export function requestAllowed(req,port,token,api=true){
   if(!api)return true;
   return(req.headers.cookie||'').split(';').some(c=>c.trim()==='boostera_session='+token);
 }
-export function createApp({port=47831,service=new RpcClient(9225),polling=true,focus=focusStudio,nativeUi=new NativeUi(),battleUi=new NativeBattleUi()}={}){
+export function createApp({port=47831,service=new RpcClient(9225),polling=true,focus=focusStudio,nativeUi=new NativeUi(),battleUi=new NativeBattleUi(),phoneLink=null}={}){
   const token=crypto.randomBytes(32).toString('hex');
   let state={connected:false,live:false,candidates:[],operations:[],battle:null,events:[],error:'CONNECTING'};
   let running=false,lastCandidatesAt=0,batches={},batchEpoch,self=null,lastUserAt=0;
   const history=[];
   let nativeStatus={ready:false},lastNativeAt=0;
-  const invites=new InviteController({service,ui:nativeUi,getState:()=>state});
-  const battles=new BattleController({service,ui:battleUi});
+  const roomGuard=roomId=>phoneLink?.assertRoom(roomId);
+  const invites=new InviteController({service,ui:nativeUi,getState:()=>state,roomGuard});
+  const battles=new BattleController({service,ui:battleUi,roomGuard});
   async function poll(){
     if(running)return;
     running=true;
@@ -46,6 +49,8 @@ export function createApp({port=47831,service=new RpcClient(9225),polling=true,f
       if(Date.now()-lastNativeAt>4000){try{nativeStatus=await nativeUi.inspect();}catch{nativeStatus={ready:false};}lastNativeAt=Date.now();}
       const next={...normalizeSnapshot(snapshot,{providerReady,panel,battleStatus,linked,batches}),self};
       next.actions={mode:nativeStatus?.ready?'native-ui':'observe',invite:Boolean(nativeStatus?.ready&&next.live&&next.providerReady),accept:false,reject:false,reason:nativeStatus?.ready?null:'OPEN_COHOST_PANEL'};
+      try{await roomGuard(snapshot.session?.roomId||'');}
+      catch(error){next.actions.invite=false;next.actions.reason=error.code||'PHONE_LINK_UNAVAILABLE';}
       for(const event of summarizeChanges(state,next))history.push({...event,id:crypto.randomUUID(),at:Date.now()});
       state={...next,events:history.slice(-100),error:null,version:'0.2.0'};
     }catch{
@@ -62,6 +67,11 @@ export function createApp({port=47831,service=new RpcClient(9225),polling=true,f
     if(url.pathname.startsWith('/api/')){
       if(!requestAllowed(req,port,token))return send(401,{error:'OPEN_PANEL_FIRST'});
       if(url.pathname==='/api/state'&&req.method==='GET')return send(200,state);
+      if(url.pathname==='/api/phone'&&req.method==='GET')return send(200,phoneLink?await phoneLink.state(state.session?.roomId):{configured:false,error:'PHONE_LINK_NOT_CONFIGURED'});
+      if(url.pathname==='/api/phone/import'&&req.method==='POST'){
+        try{if(!phoneLink)throw new Error('PHONE_LINK_NOT_CONFIGURED');return send(200,await phoneLink.importTarget());}
+        catch(error){return send(error.status||503,{error:error.code||'PHONE_LINK_UNAVAILABLE'});}
+      }
       if(url.pathname==='/api/battles'&&req.method==='GET')return send(200,await battles.state());
       if(url.pathname==='/api/battles/action'&&req.method==='POST'){
         try{const receipt=await battles.execute(await readJson(req));await poll();return send(200,receipt);}
@@ -110,7 +120,8 @@ function focusStudio(){
   });
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
-  const port=47831,{server}=createApp({port});
+  const phoneLink=new PhoneLink({directory:process.env.BOOSTERA_PHONE_CONNECTION_DIR||path.join(os.homedir(),'tikapi','boostera-studio','data','connection'),stateFile:path.join(root,'runtime','phone-link.json')});
+  const port=47831,{server}=createApp({port,phoneLink});
   server.on('error',e=>{console.error(e.code==='EADDRINUSE'?'BOOSTERA is already running on http://127.0.0.1:47831':'Unable to start BOOSTERA');process.exitCode=e.code==='EADDRINUSE'?0:1;if(e.code==='EADDRINUSE'&&process.argv.includes('--open')&&process.platform==='win32')spawn('cmd.exe',['/d','/c','start','','http://127.0.0.1:'+port],{windowsHide:true});});
   server.listen(port,'127.0.0.1',()=>{console.log('BOOSTERA LIVE Web: http://127.0.0.1:'+port);if(process.argv.includes('--open')&&process.platform==='win32')spawn('cmd.exe',['/d','/c','start','','http://127.0.0.1:'+port],{windowsHide:true});});
   process.on('SIGINT',()=>server.close(()=>process.exit(0)));process.on('SIGTERM',()=>server.close(()=>process.exit(0)));

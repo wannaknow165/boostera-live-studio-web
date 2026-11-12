@@ -3,8 +3,8 @@ export class InviteError extends Error {
   constructor(code,status=409){super(code);this.code=code;this.status=status;}
 }
 export class InviteController {
-  constructor({service,ui,getState,now=Date.now,pause=ms=>new Promise(r=>setTimeout(r,ms)),observeMs=6000}){
-    Object.assign(this,{service,ui,getState,now,pause,observeMs});this.drafts=new Map();this.requests=new Map();this.cooldowns=new Map();this.active=false;
+  constructor({service,ui,getState,now=Date.now,pause=ms=>new Promise(r=>setTimeout(r,ms)),observeMs=6000,roomGuard=async()=>{}}){
+    Object.assign(this,{service,ui,getState,now,pause,observeMs,roomGuard});this.drafts=new Map();this.requests=new Map();this.cooldowns=new Map();this.active=false;
   }
   validateInput(uid,epoch){
     if(typeof uid!=='string'||!/^\d{1,30}$/.test(uid)||typeof epoch!=='string'||epoch.length>160)throw new InviteError('INVALID_TARGET',400);
@@ -12,6 +12,7 @@ export class InviteController {
   async fresh(uid,epoch){
     this.validateInput(uid,epoch);
     const snapshot=await this.service.state('interactionConnection','snapshot');
+    await this.roomGuard(snapshot?.session?.roomId||'');
     if(!snapshot?.session?.epoch||snapshot.session.epoch!==epoch)throw new InviteError('SESSION_CHANGED');
     if(snapshot.health!=='ready')throw new InviteError('STUDIO_NOT_READY');
     if(snapshot.session.selfUid===uid)throw new InviteError('SELF_INVITE_NOT_ALLOWED');

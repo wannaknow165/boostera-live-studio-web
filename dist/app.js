@@ -3,6 +3,7 @@ const $=id=>document.getElementById(id);
 const local=location.protocol==='http:'&&['127.0.0.1','localhost'].includes(location.hostname)&&location.port==='47831';
 let inviteDraft=null,inviteBusy=false;
 let battleControl=null,battleBusy=false,battleLoading=false,battleReceipt=null;
+let phoneLinkBusy=false;
 let state={connected:false,candidates:[],operations:[],events:[]},tab='all',busy=false,toastTimer,requestVersion=0;
 const set=(id,text)=>{$(id).textContent=text;};
 const time=value=>new Date(value).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -140,6 +141,7 @@ const inviteErrors={
   CONFIRMATION_EXPIRED:'האישור פג. בחר שוב את היוצר לפני שליחה.',
   REFRESH_CANDIDATES:'רענן את רשימת היוצרים ונסה שוב.',
   OPEN_COHOST_PANEL:'פתח את פאנל Co-host בסטודיו והשאר אותו פתוח.',
+  PHONE_ROOM_NOT_ATTACHED_TO_STUDIO:'חדר הטלפון נקלט. יש לחבר את Studio לאותו חדר לפני הזמנה או באטל.',
   TARGET_NOT_IN_NATIVE_LIST:'היוצר לא נמצא כרגע ברשימה שבסטודיו. פתח את הרשימה המתאימה ובחר שוב.',
   NATIVE_INVITE_DISABLED:'הסטודיו אינו מאפשר כרגע להזמין את היוצר הזה.',
   AMBIGUOUS_NATIVE_TARGET:'לא זוהה כפתור הזמנה יחיד ליוצר. לא נשלחה הזמנה.',
@@ -183,6 +185,7 @@ function renderBattleControls(){
   const waiting=scopes.find(s=>s.role==='inviter');
   let message=!local?'פתח את הפאנל המקומי כדי לשלוט בבאטל.':!connected?'ממתין לחיבור ל־Studio ולשידור פעיל.':incoming?'התקבלה הזמנת באטל. אפשר לקבל או לדחות כאן.':waiting?'הזמנת באטל ממתינה לתשובת הצד השני.':battleControl.actions.length?'בחר את הפעולה הבאה לבאטל.':'חבר יוצר ב־Co-host ופתח את Match בסטודיו. הפקדים הזמינים יופיעו כאן.';
   if(state.battle?.status==='open')message='TikTok מדווח על באטל פעיל.';
+  if(battleControl?.error==='PHONE_ROOM_NOT_ATTACHED_TO_STUDIO')message='חדר הטלפון נקלט. פקדי הבאטל ממתינים לחיבור Studio לאותו חדר.';
   if(battleBusy)message='מעביר את הפעולה ל־Studio…';
   else if(battleReceipt)message=battleReceipt;
   set('battle-controls-message',message);
@@ -214,4 +217,20 @@ async function performBattleAction(action){
     battleReceipt=['BATTLE_CHANGED','SESSION_CHANGED'].includes(error.message)?'ההזמנה או המשתתפים השתנו. המצב מתרענן; בחר שוב.':error.message==='BATTLE_ACTION_UNAVAILABLE'?'הפעולה אינה זמינה עוד בסטודיו.':'לא ניתן לאמת את תוצאת הפעולה. בדוק בסטודיו לפני ניסיון נוסף.';
   }finally{battleBusy=false;renderBattleControls();void update();}
 }
-render();renderBattleControls();if(local){void update();void updateBattleControls();setInterval(update,1800);setInterval(updateBattleControls,2400);}
+async function updatePhoneLink(){
+  if(!local||phoneLinkBusy)return;
+  try{
+    const response=await fetch('/api/phone',{cache:'no-store',signal:AbortSignal.timeout(4500)});
+    if(!response.ok)throw new Error();const p=await response.json();
+    set('phone-link-status',!p.received?'פתח את BOOSTERA בטלפון וצור חדר TikTok. הפרטים יתקבלו כאן.':!p.fresh?'פרטי החדר התקבלו בעבר. רענן את החיבור מהטלפון לפני שידור חדש.':!p.imported?'החדר התקבל מהטלפון. אפשר לחבר אותו למנוע השידור.':p.sameStudioRoom?'השידור ופקדי הבאטל מחוברים לאותו חדר.':'יעד השידור חובר. פקדי הבאטל ממתינים לחיבור Studio לאותו חדר.');
+    $('phone-link-import').disabled=!p.received||!p.fresh;
+    set('phone-link-import',p.imported?'סנכרן שוב את חדר הטלפון':'חבר את חדר הטלפון לשידור');
+  }catch{set('phone-link-status','חיבור הטלפון אינו זמין כרגע.');$('phone-link-import').disabled=true;}
+}
+$('phone-link-import').addEventListener('click',async()=>{
+  if(phoneLinkBusy)return;phoneLinkBusy=true;$('phone-link-import').disabled=true;
+  try{await inviteRequest('/api/phone/import',{});toast('יעד השידור התקבל מהטלפון. החיבור אינו מפעיל מצלמה או מיקרופון.');}
+  catch(e){toast(e.message==='PHONE_BROADCAST_ALREADY_ACTIVE'?'כבר מתבצע שידור. יעד השידור נשמר ללא שינוי.':'לא ניתן לחבר את החדר. רענן את החיבור בטלפון ונסה שוב.');}
+  finally{phoneLinkBusy=false;void updatePhoneLink();void updateBattleControls();}
+});
+render();renderBattleControls();if(local){void update();void updateBattleControls();void updatePhoneLink();setInterval(update,1800);setInterval(updateBattleControls,2400);setInterval(updatePhoneLink,5000);}

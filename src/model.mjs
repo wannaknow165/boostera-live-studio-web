@@ -25,7 +25,7 @@ export function normalizeCandidates(batches,snapshot,linked=[],nativeCandidates=
     if(!uid||!roomId||uid===snapshot.session?.selfUid)continue;
     const old=rows.get(uid)||{};
     rows.set(uid,{...old,uid,roomId,name:text(first(old.name,candidate.name)),handle:text(old.handle),avatar:safeUrl(first(old.avatar,candidate.avatar)),
-      sources:[...new Set([...(old.sources||[]),...(candidate.sources||[]).filter(v=>['recommend_list','followed_list'].includes(v))])],
+      sources:[...new Set([...(old.sources||[]),...(candidate.sources||[]).filter(v=>['recommend_list','followed_list','search_list'].includes(v))])],
       nativeObserved:true,inviteAvailable:candidate.inviteAvailable===true});
   }
   for(const [uid,user]of Object.entries(snapshot.users||{})){

@@ -5,12 +5,30 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPORT = "import {nativeBattleDocument,battleActions} from './src/battles.mjs'; console.log(JSON.stringify({source:nativeBattleDocument.toString(),actions:Object.keys(battleActions)}))"
+EXPORT = "import {nativeBattleDocument,battleActions} from './src/battles.mjs'; import {NativeUi} from './src/native-ui.mjs'; const expressions=[]; const ui=new NativeUi(); ui.connect=async()=>({evaluate:async e=>{expressions.push(e);return {clicked:true}},close(){}}); await ui.inspect(); await ui.clickInvite('333'); console.log(JSON.stringify({source:nativeBattleDocument.toString(),actions:Object.keys(battleActions),inviteInspect:expressions[0],inviteClick:expressions[1]}))"
 adapter = json.loads(subprocess.check_output(['node', '--input-type=module', '-e', EXPORT], cwd=ROOT, text=True, encoding='utf-8'))
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     page = browser.new_page(viewport={'width': 430, 'height': 932})
+    # Studio's search replaces the friend tabs. A busy result is visible but
+    # must never be treated as an available invitation or dispatched again.
+    page.set_content('''<input placeholder="Search" value="qa_creator">
+      <div data-cohost-candidate data-roomtype="search" data-uid="333" data-roomid="444" data-cohost-clickable="1">QA Creator
+      <button data-action="cohost-invite" data-uid="333" onclick="window.invites=(window.invites||0)+1">Invite</button></div>''')
+    search = page.evaluate(adapter['inviteInspect'])
+    assert search['ready'] and search['selected']=='search'
+    assert search['candidates'][0]['sources']==['search_list']
+    assert page.evaluate(adapter['inviteClick'])['clicked']
+    assert page.evaluate('window.invites')==1
+    page.locator('button').evaluate('(e)=>e.setAttribute("data-loading", "")')
+    assert not page.evaluate(adapter['inviteInspect'])['buttons'][0]['enabled']
+    assert not page.evaluate(adapter['inviteClick'])['clicked']
+    page.locator('button').evaluate('(e)=>e.removeAttribute("data-loading")')
+    page.locator('[data-cohost-candidate]').evaluate('(e)=>e.setAttribute("data-cohost-clickable", "0")')
+    assert not page.evaluate(adapter['inviteInspect'])['buttons'][0]['enabled']
+    assert not page.evaluate(adapter['inviteClick'])['clicked']
+    assert page.evaluate('window.invites')==1
     def inspect(command=None):
         return page.evaluate('([source, actions, command]) => (0,eval)("("+source+")")(actions, command)', [adapter['source'], adapter['actions'], command])
     page.set_content('''<div data-ix-state="match.invitation" data-ix-battle-id="456" data-ix-channel-id="789" data-ix-invitation-role="invitee">

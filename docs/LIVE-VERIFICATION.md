@@ -4,14 +4,17 @@
 
 The user selected the already authenticated Studio account and started its LIVE manually. The native connection reported a real owner room, `health: ready`, and allowed Co-host and battle capabilities. No account cookies or stream keys are included in this repository.
 
-The investigation found two integration bugs that synthetic happy-path fixtures had missed:
+The investigation found integration bugs that synthetic happy-path fixtures had missed:
 
 1. Minimized Electron documents report `visibilityState: hidden` while their original controls remain rendered and enabled. The adapter now uses the actual element's visibility and enabled state, with fresh session checks, without activating the window or injecting desktop input.
 2. Studio's bridge serializes its candidate `Map` as a type/size marker rather than entries. The adapter now reads the original renderer's explicitly tagged candidate cards (`data-cohost-candidate`, UID and room ID). The controller requires current-session permission and rechecks the native button before any invitation. Explicit denials are still rejected.
+3. Native search replaces the Friends tabs. The adapter now recognizes tagged search results without switching tabs. A loading button or a card marked non-clickable is rejected even when the HTML button's `disabled` property is false, preventing duplicate invitations during an unresolved request.
 
 Real observations confirmed an active room and eligible suggested creators through this background path. Four Quick Co-host requests observed during the test were cancelled; they were not treated as completed connections or battles. At 19:30 UTC, the native snapshot stopped reporting an owner room and returned to `initializing`, with no linked partner or battle. The microphone remained muted and disabled. A real two-party battle, opponent video in the phone browser, and end-to-end phone battle control remain unverified.
 
 An unauthenticated browser viewing the selected Studio account received TikTok's private-account message and no video. The native authenticated connection was used to verify its owner room. External event-reader failure must not be interpreted as proof that the native LIVE is offline.
+
+The user subsequently opened new owner rooms. The second owned account was identified in native search by matching its public user ID, and Studio briefly associated it with a room before showing it offline. Studio also displayed a camera-only Co-host error: its scene contained an Animaze camera source, while the selected Co-host camera was null. Opening a room, finding a candidate, and clicking Invite are separate from an accepted connection. No two-party battle had been observed at this checkpoint.
 
 ## RTMP result and correction
 
@@ -27,7 +30,7 @@ Code changes were tested independently of the active stream. Updating the alread
 
 ## Validation
 
-- All 35 root connector tests passed, covering room/session changes, duplicate actions, native candidate recovery, explicit permission denial, encrypted phone handoff and safe unlinking.
+- All 36 root connector tests passed, covering room/session changes, duplicate actions, native candidate recovery, busy search controls, explicit permission denial, encrypted phone handoff and safe unlinking.
 - Browser regressions use the actual dashboard assets and rendered native-control fixtures, including minimized-document behavior and CSS-hidden controls.
 - All 21 mobile tests passed. Mobile tests and browser flows cover actual local RTMP/HLS decoding, FFmpeg progress, failed destinations, muted/recorded synthetic audio, effects composition and battle telemetry rendering.
 

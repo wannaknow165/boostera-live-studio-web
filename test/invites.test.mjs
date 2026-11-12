@@ -59,10 +59,11 @@ test('a rejected native operation is reported as failed with the server reason',
   const draft=await f.controller.prepare({uid:'333',epoch:'fresh'}),receipt=await f.controller.send({...draft,requestId});
   assert.equal(receipt.outcome,'failed');assert.equal(receipt.error.message,'Not available');
 });
-function nativeFixture({disabled=false,duplicate=false}={}){
+function nativeFixture({disabled=false,duplicate=false,loading=false,clickable=true,search=false}={}){
   let clicks=0;
-  const button={disabled,hasAttribute:()=>false,getAttribute:()=>null,getClientRects:()=>[{}],scrollIntoView(){},click(){clicks++;}};
-  const document={visibilityState:'hidden',querySelector:()=>({}),querySelectorAll(selector){return selector.includes('333')?(duplicate?[button,button]:[button]):[];}};
+  const card={getAttribute:key=>key==='data-cohost-clickable'?(clickable?'1':'0'):null};
+  const button={disabled,hasAttribute:key=>key==='data-loading'&&loading,getAttribute:()=>null,closest:()=>card,getClientRects:()=>[{}],scrollIntoView(){},click(){clicks++;}};
+  const document={visibilityState:'hidden',querySelector:selector=>search&&selector.includes('role="tab"')?null:{},querySelectorAll(selector){return selector.includes('333')?(duplicate?[button,button]:[button]):[];}};
   class Socket extends EventTarget{
     constructor(){super();queueMicrotask(()=>this.dispatchEvent(new Event('open')));}
     send(data){const req=JSON.parse(data);const value=vm.runInNewContext(req.params.expression,{document,getComputedStyle:()=>({visibility:'visible'})});queueMicrotask(()=>this.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({id:req.id,result:{result:{value}}})})));}
@@ -74,8 +75,12 @@ function nativeFixture({disabled=false,duplicate=false}={}){
 test('native adapter clicks only one exact enabled UID-tagged Invite button',async()=>{
   const f=nativeFixture();assert.equal((await f.ui.clickInvite('333')).clicked,true);assert.equal(f.clicks,1);
 });
-test('native adapter refuses disabled or ambiguous UI buttons',async()=>{
-  for(const options of [{disabled:true},{duplicate:true}]){const f=nativeFixture(options);await assert.rejects(f.ui.clickInvite('333'),/NATIVE_INVITE_DISABLED|AMBIGUOUS_NATIVE_TARGET/);assert.equal(f.clicks,0);}
+test('native adapter refuses disabled, loading, non-clickable or ambiguous UI buttons',async()=>{
+  for(const options of [{disabled:true},{duplicate:true},{loading:true},{clickable:false}]){const f=nativeFixture(options);await assert.rejects(f.ui.clickInvite('333'),/NATIVE_INVITE_DISABLED|AMBIGUOUS_NATIVE_TARGET/);assert.equal(f.clicks,0);}
+});
+test('native search results work without friend tabs and loading never dispatches twice',async()=>{
+  const f=nativeFixture({search:true});assert.equal((await f.ui.clickInvite('333')).clicked,true);assert.equal(f.clicks,1);
+  const busy=nativeFixture({search:true,loading:true});await assert.rejects(busy.ui.clickInvite('333'),/NATIVE_INVITE_DISABLED/);assert.equal(busy.clicks,0);
 });
 test('native adapter rejects a debugger endpoint outside the local app',async()=>{
   const ui=new NativeUi({fetcher:async()=>({json:async()=>[{type:'page',url:'file:///C:/Program%20Files/TikTok%20LIVE%20Studio/1.39.6/resources/app/html/popupMulti/index.html',webSocketDebuggerUrl:'ws://evil.example:9222/test'}]})});

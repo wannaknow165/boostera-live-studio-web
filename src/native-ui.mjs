@@ -40,13 +40,14 @@ export class NativeUi {
     try{return await session.evaluate(String.raw`(()=>{
       const tab=document.querySelector('[role="tab"][aria-controls="friend"]');
       const shown=e=>!!(e&&e.isConnected&&e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden');
-      const enabled=e=>shown(e)&&!e.disabled&&!e.hasAttribute('data-disabled')&&e.getAttribute('aria-disabled')!=='true';
+      const enabled=e=>shown(e)&&!e.disabled&&!e.hasAttribute('data-disabled')&&!e.hasAttribute('data-loading')&&e.getAttribute('aria-disabled')!=='true'&&e.closest('[data-cohost-candidate]')?.getAttribute('data-cohost-clickable')!=='0';
       const candidates=[...document.querySelectorAll('[data-cohost-candidate][data-uid][data-roomid]')].filter(shown).map(e=>{
         const button=e.querySelector('button[data-action="cohost-invite"]');
         return{uid:e.getAttribute('data-uid'),roomId:e.getAttribute('data-roomid'),name:e.innerText.split('\n')[0],avatar:e.querySelector('img')?.src||'',
-          sources:[e.getAttribute('data-roomtype')==='suggested_creators'?'recommend_list':'followed_list'],inviteAvailable:enabled(button)};
+          sources:[e.getAttribute('data-roomtype')==='search'?'search_list':e.getAttribute('data-roomtype')==='suggested_creators'?'recommend_list':'followed_list'],inviteAvailable:enabled(button)};
       });
-      return{ready:shown(tab),selected:document.querySelector('[role="tab"][aria-selected="true"][aria-controls="friend"],[role="tab"][aria-selected="true"][aria-controls="suggested_creators"]')?.getAttribute('aria-controls')||'',
+      const searching=shown(document.querySelector('input[placeholder="Search"]'))&&candidates.some(c=>c.sources.includes('search_list'));
+      return{ready:shown(tab)||searching,selected:searching?'search':document.querySelector('[role="tab"][aria-selected="true"][aria-controls="friend"],[role="tab"][aria-selected="true"][aria-controls="suggested_creators"]')?.getAttribute('aria-controls')||'',
         candidates,buttons:[...document.querySelectorAll('button[data-uid][data-action="cohost-invite"]')].map(e=>({uid:e.getAttribute('data-uid'),enabled:enabled(e)}))};
     })()`);}finally{session.close();}
   }
@@ -56,6 +57,7 @@ export class NativeUi {
     if(!observed?.ready)throw new Error('OPEN_COHOST_PANEL');
     let button=observed.buttons.filter(x=>x.uid===uid);
     if(button.length===1&&button[0].enabled)return{ready:true,uid};
+    if(observed.selected==='search')throw new Error(button.length===1?'NATIVE_INVITE_DISABLED':'TARGET_NOT_IN_NATIVE_LIST');
     const target=sources.includes('followed_list')?'friend':sources.some(s=>['recommend_list','league_recommend_list','may_know_list','game_list','search_list'].includes(s))?'suggested_creators':null;
     if(target&&observed.selected!==target){
       const session=await this.connect();
@@ -74,7 +76,7 @@ export class NativeUi {
     if(!/^\d{1,30}$/.test(uid))throw new Error('INVALID_TARGET');
     const session=await this.connect();
     try{
-      const expression='(()=>{if(!document.querySelector(\'[role="tab"][aria-controls="friend"]\'))return{clicked:false,error:"OPEN_COHOST_PANEL"};const nodes=[...document.querySelectorAll(\'button[data-action="cohost-invite"][data-uid="'+uid+'"]\')];if(nodes.length!==1)return{clicked:false,error:"AMBIGUOUS_NATIVE_TARGET"};const e=nodes[0];if(e.disabled||e.hasAttribute("data-disabled")||e.getAttribute("aria-disabled")==="true"||!e.getClientRects().length||getComputedStyle(e).visibility==="hidden")return{clicked:false,error:"NATIVE_INVITE_DISABLED"};e.scrollIntoView({block:"nearest"});e.click();return{clicked:true,uid:'+JSON.stringify(uid)+'};})()';
+      const expression='(()=>{const searching=document.querySelector(\'input[placeholder="Search"]\')&&document.querySelector(\'[data-cohost-candidate][data-roomtype="search"][data-uid="'+uid+'"][data-roomid]\');if(!document.querySelector(\'[role="tab"][aria-controls="friend"]\')&&!searching)return{clicked:false,error:"OPEN_COHOST_PANEL"};const nodes=[...document.querySelectorAll(\'button[data-action="cohost-invite"][data-uid="'+uid+'"]\')];if(nodes.length!==1)return{clicked:false,error:"AMBIGUOUS_NATIVE_TARGET"};const e=nodes[0];if(e.disabled||e.hasAttribute("data-disabled")||e.hasAttribute("data-loading")||e.getAttribute("aria-disabled")==="true"||e.closest("[data-cohost-candidate]")?.getAttribute("data-cohost-clickable")==="0"||!e.getClientRects().length||getComputedStyle(e).visibility==="hidden")return{clicked:false,error:"NATIVE_INVITE_DISABLED"};e.scrollIntoView({block:"nearest"});e.click();return{clicked:true,uid:'+JSON.stringify(uid)+'};})()';
       const result=await session.evaluate(expression);
       if(!result?.clicked)throw new Error(result?.error||'NATIVE_CLICK_FAILED');
       return result;

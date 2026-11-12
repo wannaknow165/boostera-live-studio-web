@@ -44,6 +44,15 @@ test('local HTTP contract rejects cross-site origins, rebinding and missing sess
   assert.equal(requestAllowed({headers:{host:req.headers.host}},47831,'secret'),false);
   assert.equal(requestAllowed({headers:{...req.headers,'sec-fetch-site':'cross-site'}},47831,'secret'),false);
 });
+
+test('a cleared real battle logs its end once without treating disconnection as a result',()=>{
+  const base=normalizeSnapshot(snapshot),playing={...base,battle:{id:'999',status:'open'},battleStatus:'ONGOING'};
+  const ended={...base,battle:null,battleStatus:'SELECT_MODE'};
+  assert.equal(summarizeChanges(playing,ended).filter(e=>e.title==='הבאטל הסתיים').length,1);
+  assert.equal(summarizeChanges(ended,ended).length,0);
+  for(const next of [{...ended,connected:false},{...ended,live:false},{...ended,session:{epoch:'other'}},{...ended,battleStatus:'ONGOING'}])
+    assert.ok(!summarizeChanges(playing,next).some(e=>e.title==='הבאטל הסתיים'));
+});
 test('TCP responses correlate by ID and preserve split Hebrew UTF-8',async()=>{
   const server=net.createServer(socket=>{
     let text='';socket.on('data',chunk=>{text+=chunk;let n;while((n=text.indexOf('\n'))>=0){const request=JSON.parse(text.slice(0,n));text=text.slice(n+1);const response=Buffer.from(JSON.stringify({jsonrpc:'2.0',id:request.id,result:{word:'שלום',method:request.method}})+'\n');const split=response.indexOf(Buffer.from('ש'))+1;setTimeout(()=>{socket.write(response.subarray(0,split));setTimeout(()=>socket.write(response.subarray(split)),2);},request.method==='second'?10:30);}});

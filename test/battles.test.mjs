@@ -27,6 +27,18 @@ test('fresh HTTP request IDs still cannot repeat an unchanged native action',asy
   const t=setup(),body=await request(t);await t.controller.execute(body);
   await t.controller.execute({...body,requestId:crypto.randomUUID()});assert.equal(t.clicks,1);
 });
+
+test('returning to the same native screen in a later round permits a new action but not duplicate retries',async()=>{
+  const t=setup();t.snapshot.battle=null;t.native.identity='mode-screen';t.native.buttons=[{action:'cohostMode.getStarted',enabled:true}];
+  const request=async()=>({...await t.controller.state(),action:'cohostMode.getStarted',requestId:crypto.randomUUID()});
+  const first=await request();await t.controller.execute(first);assert.equal(t.clicks,1);
+  t.native.identity='start-screen';await t.controller.state();t.native.identity='mode-screen';
+  const second=await request();assert.notEqual(second.revision,first.revision);await t.controller.execute(second);assert.equal(t.clicks,2);
+  await t.controller.execute({...second,requestId:crypto.randomUUID()});assert.equal(t.clicks,2);
+  // A battle transition also distinguishes rounds if the same controls stay rendered.
+  t.snapshot.battle={battleId:'999',status:'open'};await t.controller.state();t.snapshot.battle=null;
+  const third=await request();assert.notEqual(third.revision,second.revision);await t.controller.execute(third);assert.equal(t.clicks,3);
+});
 test('room change and bridge health loss prevent accepting a stale invitation',async()=>{
   for(const mutate of [t=>{t.snapshot.session.epoch='different-room';},t=>{t.snapshot.health='offline';}]){
     const t=setup(),body=await request(t);mutate(t);

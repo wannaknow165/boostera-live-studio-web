@@ -73,7 +73,7 @@ export class NativeBattleUi extends NativeUi {
 
 export class BattleController {
   constructor({service,ui=new NativeBattleUi(),now=Date.now,roomGuard=async()=>{}}){
-    Object.assign(this,{service,ui,now,roomGuard});this.requests=new Map();this.revisions=new Map();this.active=false;
+    Object.assign(this,{service,ui,now,roomGuard});this.requests=new Map();this.revisions=new Map();this.active=false;this.observationKey=null;this.generation=0;
   }
   async inspect(){
     const before=await this.service.state('interactionConnection','snapshot');
@@ -82,7 +82,12 @@ export class BattleController {
     const native=await this.ui.inspect();
     const after=await this.service.state('interactionConnection','snapshot');
     if(after?.health!=='ready'||after?.session?.epoch!==before.session.epoch)throw new InviteError('SESSION_CHANGED');
-    const revision=crypto.createHash('sha256').update(JSON.stringify([before.session.epoch,native.identity])).digest('hex');
+    // A later round can return to an identical mode-selection screen. Keep
+    // retries idempotent within one observed phase without reusing an earlier
+    // round's click acknowledgement when the native workflow has moved on.
+    const observationKey=JSON.stringify([before.session.epoch,native.identity,after.battle?.battleId||'',after.battle?.status||'']);
+    if(observationKey!==this.observationKey){this.observationKey=observationKey;this.generation++;}
+    const revision=crypto.createHash('sha256').update(JSON.stringify([observationKey,this.generation])).digest('hex');
     return {native,revision,epoch:before.session.epoch,battle:after.battle};
   }
   async state(){

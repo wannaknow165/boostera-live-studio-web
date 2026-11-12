@@ -1,37 +1,51 @@
 # Live verification — 12 November 2026
 
-## Verified against the real local Studio
+## Verified with two real owned accounts
 
-The user selected the already authenticated Studio account and started its LIVE manually. The native connection reported a real owner room, `health: ready`, and allowed Co-host and battle capabilities. No account cookies or stream keys are included in this repository.
+The user ran one account in TikTok LIVE Studio and a second account on a phone, with microphones muted. These observations came from the authenticated native bridge, the running dashboard, and the original TikTok interfaces, separately from the synthetic test suite.
 
-The investigation found integration bugs that synthetic happy-path fixtures had missed:
+| Check | Observed result |
+| --- | --- |
+| Co-host connection | An invitation progressed from pending to succeeded; the second account was linked. |
+| Co-host invitation from updated connector | The search adapter clicked the exact owned account's native Invite control. Studio recorded the operation, and phone acceptance established the connection. |
+| Outgoing battle through running dashboard | Dashboard HTTP actions invoked mode selection and match.start; a new battle remained pending until phone acceptance, then changed to open / ONGOING. |
+| Battle end and another round | The old battle cleared while Co-host remained connected. Later rounds received different battle IDs. |
+| Withdrawal through updated controller | A new invitation was sent, its inviter scope was observed, and withdrawal cleared the battle while Co-host stayed linked. |
+| Actual browser rendering | Headless Chromium opened the running dashboard with live data at a 390px viewport: active battle, two participants, no horizontal overflow or page errors. |
+| Phone TikTok view | A user-provided screenshot showed the actual two-sided match, countdown, 0–0 score, and microphone mute state in native TikTok. The Studio side showed its virtual-camera image. |
 
-1. Minimized Electron documents report `visibilityState: hidden` while their original controls remain rendered and enabled. The adapter now uses the actual element's visibility and enabled state, with fresh session checks, without activating the window or injecting desktop input.
-2. Studio's bridge serializes its candidate `Map` as a type/size marker rather than entries. The adapter now reads the original renderer's explicitly tagged candidate cards (`data-cohost-candidate`, UID and room ID). The controller requires current-session permission and rechecks the native button before any invitation. Explicit denials are still rejected.
-3. Native search replaces the Friends tabs. The adapter now recognizes tagged search results without switching tabs. A loading button or a card marked non-clickable is rejected even when the HTML button's `disabled` property is false, preventing duplicate invitations during an unresolved request.
+Successful withdrawal was recorded at approximately 19:50 UTC. An earlier withdrawal attempt overlapped with phone acceptance and became an active battle; that attempt was not counted as successful cancellation. Incoming battle controls were observed, but acceptance and decline through the dashboard still have synthetic coverage only: the user manually accepted the incoming invitation before the automated action ran.
 
-Real observations confirmed an active room and eligible suggested creators through this background path. Four Quick Co-host requests observed during the test were cancelled; they were not treated as completed connections or battles. At 19:30 UTC, the native snapshot stopped reporting an owner room and returned to `initializing`, with no linked partner or battle. The microphone remained muted and disabled. A real two-party battle, opponent video in the phone browser, and end-to-end phone battle control remain unverified.
+## Corrections found during the live test
 
-An unauthenticated browser viewing the selected Studio account received TikTok's private-account message and no video. The native authenticated connection was used to verify its owner room. External event-reader failure must not be interpreted as proof that the native LIVE is offline.
+1. Minimized Electron documents report hidden visibility while original controls can remain rendered. The adapter checks element visibility, enabled state, current room and session without activating the desktop window.
+2. Studio serializes its candidate Map as a type/size marker. Candidate recovery now uses native cards tagged with UID and room ID, with fresh permission and button checks before dispatch.
+3. Native search replaces the Friends tabs. The adapter recognizes search results and respects loading and non-clickable markers rather than dispatching another request.
+4. Identical mode-selection screens recur between rounds. Previously, the duplicate-action cache could return an earlier click acknowledgement without clicking again. Revisions now change when the observed native phase or battle context changes; duplicate requests within an unchanged phase remain idempotent.
+5. Studio can clear a completed battle directly instead of returning an intermediate ended object. The event feed now logs an end when the same live session returns to mode selection. Connection loss alone is not treated as a result.
 
-The user subsequently opened new owner rooms. The second owned account was identified in native search by matching its public user ID, and Studio briefly associated it with a room before showing it offline. Studio also displayed a camera-only Co-host error: its scene contained an Animaze camera source, while the selected Co-host camera was null. Opening a room, finding a candidate, and clicking Invite are separate from an accepted connection. No two-party battle had been observed at this checkpoint.
+Studio also reported a camera-only Co-host configuration error before successful play. Its scene had an Animaze camera, but the selected Co-host camera was null. During successful play, the native layout identified the selected camera source. No native Studio files or account permissions were modified to bypass this condition.
 
 ## RTMP result and correction
 
-A bounded 15-second synthetic portrait card with silent audio was sent to the phone-created TikTok destination. The encoder exited successfully, reporting 375 output frames and approximately 758 KB written. Its only diagnostics were FLV duration/filesize-header warnings, which occur when a stream cannot seek backwards. These warnings had caused the generic `ENCODER_OR_DESTINATION_ERROR` status.
+A separate bounded 15-second portrait test card with silent audio was sent to a phone-created TikTok destination. FFmpeg exited successfully with 375 output frames and approximately 758 KB written. Harmless FLV duration/filesize-header warnings had caused a false ENCODER_OR_DESTINATION_ERROR status.
 
-RTMP output now sets `no_duration_filesize`; final encoder status, rather than a substring in a harmless warning, determines failure. A refused destination still fails and never confirms output. This transport evidence does not establish what a public viewer received.
+RTMP output now uses no_duration_filesize, and final encoder status determines failure. A refused destination still fails and never confirms output. This transport test does not establish what a public viewer received.
 
-## Account selection and runtime state
+## Remaining limits and runtime deployment
 
-The phone-created room and the selected Studio owner account differed. The obsolete phone destination and binding were explicitly unlinked before continuing with the selected Studio account. Unlinking refuses an active RTMP broadcast and does not stop a native Studio LIVE.
+- The verified control path uses native LIVE Studio on the computer. It is not an independent mobile implementation of TikTok LIVE Studio.
+- The separate mobile event reader still returned CONNECTION_FAILED_OR_SIGNING_REQUIRED with no battle data. The selected Studio account was inaccessible to an unauthenticated viewer because of account privacy. Native authenticated battle detection worked; public-reader failure did not mean the owner room was offline.
+- Scores stayed at zero during observed matches. Real nonzero scoring, gift-triggered effects, and battle telemetry reaching the independent mobile app were not verified.
+- Opponent audio/video inside the custom phone browser and effects delivered through the complete phone-to-TikTok battle path remain unverified. The supplied phone screenshot was from native TikTok.
+- Updated source modules were tested directly for creator search and withdrawal. The running dashboard successfully dispatched a battle start, but has not loaded all later fixes. Automatic approval review rejected the control-server restart with "blocked by policy" and no more specific reason. The original mobile gateway likewise has not been updated. No alternate service was used to bypass those rejections.
 
-Code changes were tested independently of the active stream. Updating the already running control server remained pending: automatic approval review rejected its restart, without a detailed reason. Do not restart Studio or broadcast services during a live user session.
+The obsolete phone RTMP destination had been unlinked before selecting the native Studio owner account. Unlinking refuses an active RTMP broadcast and does not stop a Studio LIVE. After verification, the user was told that both test LIVEs could be ended; that instruction is not proof they have ended.
 
-## Validation
+## Automated validation
 
-- All 36 root connector tests passed, covering room/session changes, duplicate actions, native candidate recovery, busy search controls, explicit permission denial, encrypted phone handoff and safe unlinking.
-- Browser regressions use the actual dashboard assets and rendered native-control fixtures, including minimized-document behavior and CSS-hidden controls.
-- All 21 mobile tests passed. Mobile tests and browser flows cover actual local RTMP/HLS decoding, FFmpeg progress, failed destinations, muted/recorded synthetic audio, effects composition and battle telemetry rendering.
+- 38 root connector tests passed, including repeat-round cache invalidation, cancellation guards, native search, duplicate-action protection, session changes and safe phone unlinking.
+- 21 mobile tests passed, including local RTMP/HLS decoding, FFmpeg progress and failed destinations.
+- Browser regressions passed for native action fixtures, minimized and CSS-hidden controls, busy search results, dashboard layout, mobile effects composition, synthetic audio/recording, and battle telemetry rendering.
 
-Local and synthetic tests are evidence for their specific code paths, not proof of a real battle or an independently hosted mobile replacement for TikTok LIVE Studio.
+Runtime captures and account identifiers remain in ignored local files. Credentials, stream keys and personal screenshots are not included in the repository.

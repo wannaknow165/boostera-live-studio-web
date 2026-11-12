@@ -73,6 +73,10 @@ export function summarizeChanges(previous,next){
   }
   if(next.battle?.id&&(next.battle.id!==previous?.battle?.id||next.battle.status!==previous?.battle?.status))
     events.push({type:'battle',title:next.battle.status==='open'?'באטל פעיל':next.battle.status==='ended'?'הבאטל הסתיים':'בקשת באטל בהמתנה',detail:'מזהה '+next.battle.id});
+  // Studio can clear the completed battle directly instead of emitting an
+  // intermediate ended object. Connection loss alone is not a battle result.
+  if(previous?.battle?.status==='open'&&!next.battle&&next.connected&&next.live&&next.battleStatus==='SELECT_MODE'&&previous.session?.epoch&&previous.session.epoch===next.session?.epoch)
+    events.push({type:'battle',title:'הבאטל הסתיים',detail:'מזהה '+previous.battle.id});
   const oldLinked=new Set(previous?.candidates?.filter(x=>x.linked).map(x=>x.uid));
   for(const p of next.candidates||[])if(p.linked&&!oldLinked.has(p.uid))events.push({type:'invite',title:'משתתף התחבר',detail:p.name||'משתתף '+p.uid.slice(-6)});
   return events;

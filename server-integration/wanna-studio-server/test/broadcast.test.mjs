@@ -36,8 +36,22 @@ test('real RTMP receiver decodes H264 video and AAC audio without LIVE Studio; r
   await pause(350);const stream=manager.start({mode:'rtmp',mime:'video/mp4',owner:'qa'});assert.equal(stream.outputConfirmed,false);
   const raw=fs.readFileSync(input);let seq=0;for(let offset=0;offset<raw.length;offset+=16384)await manager.append(stream.id,'qa',seq++,raw.subarray(offset,offset+16384));
   await waitFor(()=>manager.list()[0].outputConfirmed);assert.equal(manager.list()[0].state,'running');const exit=once(manager.items.get(stream.id).child,'exit');await manager.stop(stream.id,'qa');assert.equal((await exit)[0],0);await receiverExit;
+  assert.equal(manager.items.get(stream.id).state,'stopped');assert.equal(manager.items.get(stream.id).error,null);
   const probe=spawnSync(tools.ffprobe,['-v','error','-show_streams','-show_format','-of','json',received],{timeout:10000,windowsHide:true});assert.equal(probe.status,0,receiverLog);const media=JSON.parse(probe.stdout);assert.ok(media.streams.some(s=>s.codec_type==='video'&&s.codec_name==='h264'));assert.ok(media.streams.some(s=>s.codec_type==='audio'&&s.codec_name==='aac'));assert.ok(Number(media.format.duration)>=7);
   manager.rtmp=()=>url;
   const bad=manager.start({mode:'rtmp',mime:'video/mp4',owner:'qa'});try{await manager.append(bad.id,'qa',0,raw);}catch{}await waitFor(()=>manager.items.get(bad.id).state==='failed');assert.equal(manager.items.get(bad.id).outputConfirmed,false);
  }finally{await manager.close();receiver.kill();fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('successful RTMP shutdown is not failed by fragmented non-seekable FLV header warnings',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'wanna-flv-warning-'));let child;
+ const manager=new Broadcasts({root,rtmp:()=> 'rtmp://127.0.0.1/live/private-test-value',spawnProcess:()=>{child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.stderr=new PassThrough();child.kill=()=>child.emit('exit',1);return child;}});
+ try{
+  manager.start({owner:'qa',mode:'rtmp',mime:'video/webm'});
+  child.stdout.write('frame=375\nout_time_us=15005000\nprogress=end\n');
+  child.stderr.write('[flv @ 123] Failed to update header with correct dura');
+  child.stderr.write('tion.\r\n[flv @ 123] Failed to update header with correct filesize.\r\n');
+  child.emit('exit',0);
+  assert.equal(manager.list()[0].state,'stopped');assert.equal(manager.list()[0].error,null);assert.equal(manager.list()[0].outputConfirmed,true);
+ }finally{await manager.close();fs.rmSync(root,{recursive:true,force:true});}
 });

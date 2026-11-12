@@ -4,11 +4,11 @@ import vm from 'node:vm';
 import {InviteController} from '../src/invites.mjs';
 import {NativeUi} from '../src/native-ui.mjs';
 const requestId='11111111-1111-4111-8111-111111111111';
-function fixture({observeMs=0,onClick}={}){
+function fixture({observeMs=0,onClick,nativeObserved=false}={}){
   let snapshot={health:'ready',session:{epoch:'fresh',selfUid:'111',roomId:'222'},users:{'333':{roomId:'444',availableActions:{invite:true}}},operations:[]},clicks=0,prepares=0;
   const service={async state(){return structuredClone(snapshot);}};
   const ui={async prepare(uid){prepares++;return{ready:true,uid};},async clickInvite(uid){clicks++;if(onClick)onClick(snapshot,uid);else snapshot.operations.push({operationId:'new-operation',kind:'manual_cohost',action:'invite',targetUid:uid,createdAt:10000,step:'awaiting_peer',outcome:'pending'});}};
-  const controller=new InviteController({service,ui,now:()=>10000,observeMs,pause:async()=>{},getState:()=>({session:{epoch:'fresh'},candidates:[{uid:'333',name:'Creator',sources:['followed_list']}]})});
+  const controller=new InviteController({service,ui,now:()=>10000,observeMs,pause:async()=>{},getState:()=>({session:{epoch:'fresh'},candidates:[{uid:'333',name:'Creator',sources:['followed_list'],nativeObserved,inviteAvailable:nativeObserved}]})});
   return{controller,get snapshot(){return snapshot;},set snapshot(v){snapshot=v;},get clicks(){return clicks;},get prepares(){return prepares;}};
 }
 test('preparation identifies the target without sending any invitation',async()=>{
@@ -36,6 +36,15 @@ test('disabled, self and unknown creators are rejected before UI preparation',as
   await assert.rejects(f.controller.prepare({uid:'999',epoch:'fresh'}),/TARGET_UNAVAILABLE/);
   assert.equal(f.prepares,0);assert.equal(f.clicks,0);
 });
+
+test('a real rendered candidate can be prepared before it enters snapshot users, with explicit current-session permission',async()=>{
+  const f=fixture({nativeObserved:true});delete f.snapshot.users['333'];
+  await assert.rejects(f.controller.prepare({uid:'333',epoch:'fresh'}),/TARGET_UNAVAILABLE/);
+  f.snapshot.availability={manual_cohost:{allowed:true}};
+  const draft=await f.controller.prepare({uid:'333',epoch:'fresh'});assert.equal(f.prepares,1);assert.equal(f.clicks,0);
+  f.snapshot.availability.manual_cohost.allowed=false;
+  await assert.rejects(f.controller.send({...draft,requestId}),/TARGET_UNAVAILABLE/);assert.equal(f.clicks,0);
+});
 test('no observed operation produces an unknown receipt, never false success',async()=>{
   const f=fixture({onClick(){}}),draft=await f.controller.prepare({uid:'333',epoch:'fresh'});
   const result=await f.controller.send({...draft,requestId});assert.equal(result.submitted,null);assert.equal(result.outcome,'unknown');assert.equal(f.clicks,1);
@@ -53,7 +62,7 @@ test('a rejected native operation is reported as failed with the server reason',
 function nativeFixture({disabled=false,duplicate=false}={}){
   let clicks=0;
   const button={disabled,hasAttribute:()=>false,getAttribute:()=>null,getClientRects:()=>[{}],scrollIntoView(){},click(){clicks++;}};
-  const document={visibilityState:'visible',querySelector:()=>({}),querySelectorAll(selector){return selector.includes('333')?(duplicate?[button,button]:[button]):[];}};
+  const document={visibilityState:'hidden',querySelector:()=>({}),querySelectorAll(selector){return selector.includes('333')?(duplicate?[button,button]:[button]):[];}};
   class Socket extends EventTarget{
     constructor(){super();queueMicrotask(()=>this.dispatchEvent(new Event('open')));}
     send(data){const req=JSON.parse(data);const value=vm.runInNewContext(req.params.expression,{document,getComputedStyle:()=>({visibility:'visible'})});queueMicrotask(()=>this.dispatchEvent(new MessageEvent('message',{data:JSON.stringify({id:req.id,result:{result:{value}}})})));}

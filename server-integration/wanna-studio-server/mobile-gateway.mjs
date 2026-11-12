@@ -64,7 +64,7 @@ export function createMobileGateway({port=8801,upstreamPort=8800,clientKey='',ap
         if(name==='manage'||name==='manage/')name='manage.html';
         if(name==='viewer'||name==='viewer/')name='viewer.html';
         if(name==='pair.html'&&!localRequest(req,port))return send(res,403,{error:'LOCAL_SETUP_ONLY'});
-        if(!['index.html','pair.html','app.js','app.css','manage.html','manage.js','workspace.css','render.js','audio.js','viewer.html','viewer.js','pair.js','sw.js','manifest.webmanifest','icon-192.png','icon-512.png','apple-touch-icon.png','icon.svg'].includes(name))return send(res,404,{error:'NOT_FOUND'});
+        if(!['index.html','pair.html','app.js','app.css','manage.html','manage.js','workspace.css','render.js','battle.js','audio.js','viewer.html','viewer.js','pair.js','sw.js','manifest.webmanifest','icon-192.png','icon-512.png','apple-touch-icon.png','icon.svg'].includes(name))return send(res,404,{error:'NOT_FOUND'});
         const file=path.join(mobileDir,name);if(!fs.existsSync(file))return send(res,404,{error:'NOT_FOUND'});
         res.writeHead(200,{'Content-Type':TYPES[path.extname(name)]||'application/octet-stream','Cache-Control':name==='sw.js'?'no-cache':'no-cache',
           'Service-Worker-Allowed':'/mobile/',

@@ -1,4 +1,4 @@
-import {readFile,stat,mkdir,writeFile,rename} from 'node:fs/promises';
+import {readFile,stat,mkdir,writeFile,rename,rm} from 'node:fs/promises';
 import {createDecipheriv,createHash} from 'node:crypto';
 import path from 'node:path';
 
@@ -59,8 +59,25 @@ export class PhoneLink {
     if(this.binding&&this.binding.roomId!==studioRoomId)throw fail('PHONE_ROOM_NOT_ATTACHED_TO_STUDIO');
   }
   importTarget(){
-    if(this.pending)return this.pending;
-    this.pending=this.transfer().finally(()=>{this.pending=null;});return this.pending;
+    if(this.pending)return this.pendingKind==='import'?this.pending:Promise.reject(fail('PHONE_LINK_BUSY'));
+    this.pendingKind='import';this.pending=this.transfer().finally(()=>{this.pending=null;this.pendingKind=null;});return this.pending;
+  }
+  unlink(){
+    if(this.pending)return Promise.reject(fail('PHONE_LINK_BUSY'));
+    this.pendingKind='unlink';this.pending=this.clearTarget().finally(()=>{this.pending=null;this.pendingKind=null;});return this.pending;
+  }
+  async clearTarget(){
+    await this.loaded;
+    const request=async(route,options)=>{
+      try{const r=await this.fetcher(this.mobileOrigin+route,{...options,signal:AbortSignal.timeout(5000)});if(!r.ok)throw Error();return await r.json();}
+      catch{throw fail('PHONE_MEDIA_SERVER_UNAVAILABLE');}
+    };
+    const overview=await request('/api/workspace/overview');
+    if((overview.broadcasts||[]).some(b=>b.mode==='rtmp'&&['starting','running','stopping'].includes(b.state)))throw fail('PHONE_BROADCAST_ALREADY_ACTIVE');
+    const config=await request('/api/workspace/rtmp',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({clear:true})});
+    if(config.rtmpConfigured!==false)throw fail('PHONE_TARGET_NOT_ACKNOWLEDGED');
+    if(this.stateFile)await rm(this.stateFile,{force:true});
+    this.binding=null;return{unlinked:true};
   }
   async transfer(){
     await this.loaded;

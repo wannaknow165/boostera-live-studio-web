@@ -44,10 +44,10 @@ export function createApp({port=47831,service=new RpcClient(9225),polling=true,f
         try{batches=await service.state('interactionConnection','candidates.batches')||{};lastCandidatesAt=Date.now();}catch{batches={};}
       }
       if(Date.now()-lastUserAt>15000){
-        try{const u=await service.state('user','userInfo');self={name:String(u?.nickname||'').slice(0,120),handle:String(u?.display_id||'').slice(0,100)};lastUserAt=Date.now();}catch{}
+        try{const u=await service.state('user','anchorInfo')||await service.state('user','userInfo');self={name:String(u?.nickname||u?.name||'').slice(0,120),handle:String(u?.display_id||u?.username||'').slice(0,100)};lastUserAt=Date.now();}catch{}
       }
       if(Date.now()-lastNativeAt>4000){try{nativeStatus=await nativeUi.inspect();}catch{nativeStatus={ready:false};}lastNativeAt=Date.now();}
-      const next={...normalizeSnapshot(snapshot,{providerReady,panel,battleStatus,linked,batches}),self};
+      const next={...normalizeSnapshot(snapshot,{providerReady,panel,battleStatus,linked,batches,nativeCandidates:nativeStatus.ready?nativeStatus.candidates:[]}),self};
       next.actions={mode:nativeStatus?.ready?'native-ui':'observe',invite:Boolean(nativeStatus?.ready&&next.live&&next.providerReady),accept:false,reject:false,reason:nativeStatus?.ready?null:'OPEN_COHOST_PANEL'};
       try{await roomGuard(snapshot.session?.roomId||'');}
       catch(error){next.actions.invite=false;next.actions.reason=error.code||'PHONE_LINK_UNAVAILABLE';}
@@ -70,6 +70,10 @@ export function createApp({port=47831,service=new RpcClient(9225),polling=true,f
       if(url.pathname==='/api/phone'&&req.method==='GET')return send(200,phoneLink?await phoneLink.state(state.session?.roomId):{configured:false,error:'PHONE_LINK_NOT_CONFIGURED'});
       if(url.pathname==='/api/phone/import'&&req.method==='POST'){
         try{if(!phoneLink)throw new Error('PHONE_LINK_NOT_CONFIGURED');return send(200,await phoneLink.importTarget());}
+        catch(error){return send(error.status||503,{error:error.code||'PHONE_LINK_UNAVAILABLE'});}
+      }
+      if(url.pathname==='/api/phone'&&req.method==='DELETE'){
+        try{if(!phoneLink)throw new Error('PHONE_LINK_NOT_CONFIGURED');return send(200,await phoneLink.unlink());}
         catch(error){return send(error.status||503,{error:error.code||'PHONE_LINK_UNAVAILABLE'});}
       }
       if(url.pathname==='/api/battles'&&req.method==='GET')return send(200,await battles.state());

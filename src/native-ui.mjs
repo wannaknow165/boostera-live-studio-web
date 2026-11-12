@@ -40,8 +40,14 @@ export class NativeUi {
     try{return await session.evaluate(String.raw`(()=>{
       const tab=document.querySelector('[role="tab"][aria-controls="friend"]');
       const shown=e=>!!(e&&e.isConnected&&e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden');
-      return{ready:!!tab&&document.visibilityState==='visible',selected:document.querySelector('[role="tab"][aria-selected="true"][aria-controls="friend"],[role="tab"][aria-selected="true"][aria-controls="suggested_creators"]')?.getAttribute('aria-controls')||'',
-        buttons:[...document.querySelectorAll('button[data-uid][data-action="cohost-invite"]')].map(e=>({uid:e.getAttribute('data-uid'),enabled:shown(e)&&!e.disabled&&!e.hasAttribute('data-disabled')&&e.getAttribute('aria-disabled')!=='true'}))};
+      const enabled=e=>shown(e)&&!e.disabled&&!e.hasAttribute('data-disabled')&&e.getAttribute('aria-disabled')!=='true';
+      const candidates=[...document.querySelectorAll('[data-cohost-candidate][data-uid][data-roomid]')].filter(shown).map(e=>{
+        const button=e.querySelector('button[data-action="cohost-invite"]');
+        return{uid:e.getAttribute('data-uid'),roomId:e.getAttribute('data-roomid'),name:e.innerText.split('\n')[0],avatar:e.querySelector('img')?.src||'',
+          sources:[e.getAttribute('data-roomtype')==='suggested_creators'?'recommend_list':'followed_list'],inviteAvailable:enabled(button)};
+      });
+      return{ready:shown(tab),selected:document.querySelector('[role="tab"][aria-selected="true"][aria-controls="friend"],[role="tab"][aria-selected="true"][aria-controls="suggested_creators"]')?.getAttribute('aria-controls')||'',
+        candidates,buttons:[...document.querySelectorAll('button[data-uid][data-action="cohost-invite"]')].map(e=>({uid:e.getAttribute('data-uid'),enabled:enabled(e)}))};
     })()`);}finally{session.close();}
   }
   async prepare(uid,sources=[]){
@@ -68,7 +74,7 @@ export class NativeUi {
     if(!/^\d{1,30}$/.test(uid))throw new Error('INVALID_TARGET');
     const session=await this.connect();
     try{
-      const expression='(()=>{if(document.visibilityState!=="visible"||!document.querySelector(\'[role="tab"][aria-controls="friend"]\'))return{clicked:false,error:"OPEN_COHOST_PANEL"};const nodes=[...document.querySelectorAll(\'button[data-action="cohost-invite"][data-uid="'+uid+'"]\')];if(nodes.length!==1)return{clicked:false,error:"AMBIGUOUS_NATIVE_TARGET"};const e=nodes[0];if(e.disabled||e.hasAttribute("data-disabled")||e.getAttribute("aria-disabled")==="true"||!e.getClientRects().length||getComputedStyle(e).visibility==="hidden")return{clicked:false,error:"NATIVE_INVITE_DISABLED"};e.scrollIntoView({block:"nearest"});e.click();return{clicked:true,uid:'+JSON.stringify(uid)+'};})()';
+      const expression='(()=>{if(!document.querySelector(\'[role="tab"][aria-controls="friend"]\'))return{clicked:false,error:"OPEN_COHOST_PANEL"};const nodes=[...document.querySelectorAll(\'button[data-action="cohost-invite"][data-uid="'+uid+'"]\')];if(nodes.length!==1)return{clicked:false,error:"AMBIGUOUS_NATIVE_TARGET"};const e=nodes[0];if(e.disabled||e.hasAttribute("data-disabled")||e.getAttribute("aria-disabled")==="true"||!e.getClientRects().length||getComputedStyle(e).visibility==="hidden")return{clicked:false,error:"NATIVE_INVITE_DISABLED"};e.scrollIntoView({block:"nearest"});e.click();return{clicked:true,uid:'+JSON.stringify(uid)+'};})()';
       const result=await session.evaluate(expression);
       if(!result?.clicked)throw new Error(result?.error||'NATIVE_CLICK_FAILED');
       return result;

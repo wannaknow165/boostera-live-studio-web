@@ -21,7 +21,7 @@ try{
  const fixture=spawnSync(media.ffmpeg,['-v','error','-y','-f','lavfi','-i','color=c=blue:s=180x320:r=15','-t','1','-c:v','libvpx-vp9',path.join(root,'media','battle','multiplier_x2.webm')],{windowsHide:true,timeout:15000});if(fixture.status!==0)throw Error('Fixture generation failed');
  for(const script of ['server.mjs','mobile-gateway.mjs']){const p=spawn(process.execPath,[script],{cwd:root,env,windowsHide:true,stdio:['ignore','pipe','pipe']});jobs.push(p);p.stderr.on('data',()=>{});}
  await ready(env.WANNA_TEST_URL+'/api/mobile/session');await ready('http://127.0.0.1:18880/health');
- if(!process.argv.includes('--workspace-only'))await run('test/mobile-browser.py');await run('test/workspace-browser.py');
+ if(!process.argv.includes('--battle-only')){if(!process.argv.includes('--workspace-only'))await run('test/mobile-browser.py');await run('test/workspace-browser.py');}await run('test/battle-browser.py');
  console.log('PASS both browser flows on disposable workspace; synthetic camera/microphone and blue battle fixture; no TikTok or paid provider call.');
 }finally{
  for(const p of jobs){const done=new Promise(r=>p.once('exit',r));if(p.exitCode===null){p.kill();await done;}}

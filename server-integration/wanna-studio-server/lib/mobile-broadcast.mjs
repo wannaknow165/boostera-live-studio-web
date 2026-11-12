@@ -16,15 +16,20 @@ export class Broadcasts{
     const destination=mode==='rtmp'?this.rtmp():null;if(mode==='rtmp'&&!destination)throw Object.assign(Error('RTMP_NOT_CONFIGURED'),{status:409});
     const id=crypto.randomBytes(12).toString('hex'),dir=path.join(this.root,id);fs.mkdirSync(dir,{recursive:true});
     const base=['-hide_banner','-loglevel','warning','-nostats','-progress','pipe:1','-y','-analyzeduration','1000000','-probesize','1000000','-i','pipe:0','-map','0:v:0','-map','0:a:0?','-c:v','libx264','-preset','ultrafast','-tune','zerolatency','-pix_fmt','yuv420p','-r','30','-g','60','-b:v','2500k','-c:a','aac','-b:a','128k'];
-    const output=mode==='preview'?['-f','hls','-hls_time','2','-hls_list_size','6','-hls_flags','delete_segments+independent_segments','-hls_segment_type','fmp4','-hls_fmp4_init_filename','init.mp4','-hls_segment_filename','part-%06d.m4s','live.m3u8']:mode==='record'?['-movflags','+faststart','recording.mp4']:['-f','flv',destination];
+    const output=mode==='preview'?['-f','hls','-hls_time','2','-hls_list_size','6','-hls_flags','delete_segments+independent_segments','-hls_segment_type','fmp4','-hls_fmp4_init_filename','init.mp4','-hls_segment_filename','part-%06d.m4s','live.m3u8']:mode==='record'?['-movflags','+faststart','recording.mp4']:['-f','flv','-flvflags','no_duration_filesize',destination];
     const child=this.spawnProcess(this.ffmpeg,[...base,...output],{cwd:dir,windowsHide:true,stdio:['pipe','pipe','pipe']});
     const s={id,dir,mode,mime,owner,child,state:'starting',bytes:0,sequence:0,startedAt:Date.now(),lastChunkAt:Date.now(),error:null,writing:false,recent:new Map(),outputConfirmed:false,outputFrames:0,lastOutputAt:null};this.items.set(id,s);
     let progressBuffer='',progress={};
     child.stdout.on('data',chunk=>{progressBuffer+=chunk.toString();let end;while((end=progressBuffer.indexOf('\n'))!==-1){const line=progressBuffer.slice(0,end).trim();progressBuffer=progressBuffer.slice(end+1);const eq=line.indexOf('=');if(eq<0)continue;progress[line.slice(0,eq)]=line.slice(eq+1);if(line.startsWith('progress=')){const frames=Number(progress.frame)||0;if(frames>s.outputFrames&&Number(progress.out_time_us)>0){s.outputFrames=frames;s.outputConfirmed=true;s.lastOutputAt=Date.now();if(s.state==='starting')s.state='running';}progress={};}}});
-    child.stdin.on('error',()=>{});child.stderr.on('data',d=>{const text=d.toString();if(s.mode==='preview')s.diagnostic=((s.diagnostic||'')+text).slice(-2000);if(/Error|Invalid|failed|not found|denied/i.test(text))s.error='ENCODER_OR_DESTINATION_ERROR';});
+    // FLV streams cannot seek back to rewrite duration/filesize. Those shutdown
+    // warnings are harmless; an encoder's exit status determines success.
+    // Keep only a boolean diagnostic, never a destination-bearing stderr string.
+    let diagnosticBuffer='',encoderError=false;
+    const diagnose=line=>{if(!/Failed to update header with correct (duration|filesize)\.?$/i.test(line.trim())&&/Error|Invalid|failed|not found|denied/i.test(line))encoderError=true;};
+    child.stdin.on('error',()=>{});child.stderr.on('data',d=>{diagnosticBuffer+=d.toString();let end;while((end=diagnosticBuffer.indexOf('\n'))!==-1){diagnose(diagnosticBuffer.slice(0,end));diagnosticBuffer=diagnosticBuffer.slice(end+1);}if(diagnosticBuffer.length>8192){diagnose(diagnosticBuffer);diagnosticBuffer='';}});
     child.on('error',()=>{s.state='failed';s.error='FFMPEG_UNAVAILABLE';s.stoppedAt=Date.now();});
     s.ended=new Promise(resolve=>{child.once('exit',resolve);child.once('error',resolve);});
-    child.on('exit',code=>{if(s.state!=='failed'){s.state=code===0&&!s.error?'stopped':'failed';if(code!==0)s.error||='ENCODER_STOPPED';}s.stoppedAt=Date.now();});
+    child.on('exit',code=>{diagnose(diagnosticBuffer);if(s.state!=='failed'){s.state=code===0&&!s.error?'stopped':'failed';if(code!==0)s.error||=encoderError?'ENCODER_OR_DESTINATION_ERROR':'ENCODER_STOPPED';}s.stoppedAt=Date.now();});
     return this.view(s);
   }
   async append(id,owner,sequence,raw){

@@ -1,3 +1,4 @@
+import {mountBattle} from '/mobile/battle.js';
 import {createAudioMixer} from '/mobile/audio.js';
 import {createMobileWorkspace} from '/mobile/render.js';
 const $=id=>document.getElementById(id);
@@ -192,3 +193,5 @@ await checkSession();if(session?.authenticated){await loadCatalog();connectEvent
 $('output-quality').onchange=()=>{const value=$('output-quality').value;output.width=value==='720'?720:1080;output.height=value==='720'?1280:1920;targetFps=value==='1080-60'?60:30;set('preview-metrics',output.width+' × '+output.height+' · '+targetFps+' FPS');};
 
 $('effect-audio').onclick=()=>{const on=mixer.toggleEffects();$('effect-audio').textContent=on?'השתק קול אפקטים':'הפעל קול אפקטים';};
+
+mountBattle(document.getElementById("live-battle"));

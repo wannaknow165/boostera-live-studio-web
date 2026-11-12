@@ -26,6 +26,14 @@ with sync_playwright() as p:
     assert inspect({'action': 'match.accept', 'identity': observed['identity']})['clicked']
     assert page.evaluate('window.accepts') == 2
     page.locator('[data-ix-action="match.accept"]').first.evaluate('(e)=>e.remove()')
+    # Electron reports hidden when minimized. Rendered original controls remain
+    # actionable without bringing the window forward; CSS-hidden controls do not.
+    page.evaluate("Object.defineProperty(document,'visibilityState',{configurable:true,get:()=> 'hidden'})")
+    minimized = inspect()
+    assert minimized['ready'] and next(x for x in minimized['buttons'] if x['action']=='match.accept')['enabled']
+    page.locator('[data-ix-action="match.accept"]').evaluate('(e)=>e.style.display="none"')
+    assert 'match.accept' not in [x['action'] for x in inspect()['buttons']]
+    page.locator('[data-ix-action="match.accept"]').evaluate('(e)=>e.style.display=""')
     # No foreground APIs or keyboard/mouse injection are involved in a dispatch.
     page.evaluate('() => {window.focus=()=>{throw new Error("unexpected foreground activation")}; HTMLElement.prototype.focus=()=>{throw new Error("unexpected input focus")};}')
     observed = inspect()

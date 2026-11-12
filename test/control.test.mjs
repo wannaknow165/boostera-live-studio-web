@@ -13,6 +13,17 @@ test('only current-session candidate fields reach the dashboard',()=>{
   assert.equal(rows.length,1);assert.equal(rows[0].name,'שלום');assert.equal(rows[0].avatar,'');assert.equal(rows[0].linked,true);
   assert.ok(!JSON.stringify(rows).includes('DO_NOT_RETURN'));assert.ok(!JSON.stringify(rows).includes('stale'));
 });
+
+test('rendered native cards recover candidates omitted by Studio Map serialization without overriding a denial',()=>{
+  const rows=normalizeCandidates({__type:'Map',size:1},snapshot,[],[
+    {uid:'777',roomId:'888',name:'Native creator',inviteAvailable:true,sources:['recommend_list'],avatar:'javascript:bad'},
+    {uid:'333',roomId:'444',name:'Known creator',inviteAvailable:true,sources:['recommend_list']},
+    {uid:'bad',roomId:'444',name:'Invalid'},
+  ]);
+  assert.equal(rows.find(r=>r.uid==='777').nativeObserved,true);assert.equal(rows.find(r=>r.uid==='777').avatar,'');assert.equal(rows.length,2);
+  const denied=normalizeCandidates({}, {...snapshot,users:{'333':{availableActions:{invite:false}}}},[],[{uid:'333',roomId:'444',inviteAvailable:true}]);
+  assert.equal(denied[0].inviteAvailable,false);
+});
 test('pending battle is never promoted because a presentation field says ONGOING',()=>{
   const result=normalizeSnapshot({...snapshot,battle:{battleId:'999',status:'pending',participantUids:['111','333']}},{battleStatus:'ONGOING',providerReady:true,batches});
   assert.equal(result.battle.status,'pending');assert.equal(result.actions.invite,false);assert.equal(result.coverage.friends,true);
@@ -22,6 +33,7 @@ test('event feed records waiting, failure and connection loss without duplicatin
   const next={...base,operations:[op]};
   assert.ok(summarizeChanges(base,next).some(e=>e.title.includes('ממתינים')));
   assert.equal(summarizeChanges(next,next).length,0);
+  assert.ok(summarizeChanges(next,{...next,operations:[{...op,outcome:'cancelled',step:'cancelled'}]}).some(e=>e.title.includes('בוטלה')));
   assert.ok(summarizeChanges(next,{connected:false}).some(e=>e.type==='error'));
 });
 test('local HTTP contract rejects cross-site origins, rebinding and missing session',()=>{

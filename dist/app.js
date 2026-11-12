@@ -224,6 +224,7 @@ async function updatePhoneLink(){
     if(!response.ok)throw new Error();const p=await response.json();
     set('phone-link-status',!p.received?'פתח את BOOSTERA בטלפון וצור חדר TikTok. הפרטים יתקבלו כאן.':!p.fresh?'פרטי החדר התקבלו בעבר. רענן את החיבור מהטלפון לפני שידור חדש.':!p.imported?'החדר התקבל מהטלפון. אפשר לחבר אותו למנוע השידור.':p.sameStudioRoom?'השידור ופקדי הבאטל מחוברים לאותו חדר.':'יעד השידור חובר. פקדי הבאטל ממתינים לחיבור Studio לאותו חדר.');
     $('phone-link-import').disabled=!p.received||!p.fresh;
+    $('phone-link-unlink').hidden=!p.imported;
     set('phone-link-import',p.imported?'סנכרן שוב את חדר הטלפון':'חבר את חדר הטלפון לשידור');
   }catch{set('phone-link-status','חיבור הטלפון אינו זמין כרגע.');$('phone-link-import').disabled=true;}
 }
@@ -232,5 +233,11 @@ $('phone-link-import').addEventListener('click',async()=>{
   try{await inviteRequest('/api/phone/import',{});toast('יעד השידור התקבל מהטלפון. החיבור אינו מפעיל מצלמה או מיקרופון.');}
   catch(e){toast(e.message==='PHONE_BROADCAST_ALREADY_ACTIVE'?'כבר מתבצע שידור. יעד השידור נשמר ללא שינוי.':'לא ניתן לחבר את החדר. רענן את החיבור בטלפון ונסה שוב.');}
   finally{phoneLinkBusy=false;void updatePhoneLink();void updateBattleControls();}
+});
+$('phone-link-unlink').addEventListener('click',async()=>{
+  if(phoneLinkBusy)return;phoneLinkBusy=true;$('phone-link-unlink').disabled=true;
+  try{const r=await fetch('/api/phone',{method:'DELETE'});if(!r.ok)throw Error();toast('חדר הטלפון נותק. הפאנל יפעל מול החשבון המחובר ב־Studio.');}
+  catch{toast('לא ניתן לנתק את החדר. יש לוודא שאין שידור RTMP פעיל.');}
+  finally{phoneLinkBusy=false;$('phone-link-unlink').disabled=false;void updatePhoneLink();void updateBattleControls();}
 });
 render();renderBattleControls();if(local){void update();void updateBattleControls();void updatePhoneLink();setInterval(update,1800);setInterval(updateBattleControls,2400);setInterval(updatePhoneLink,5000);}

@@ -31,7 +31,10 @@ export function nativeBattleDocument(allowed,command){
     participantCount:attr(e,'participant-count'),selectedTeammateCount:attr(e,'selected-teammate-count'),
     giftType:attr(e,'gift-type'),giftId:attr(e,'gift-id')});
   const buttons=[];
-  if(document.visibilityState==='visible')for(const action of allowed){
+  // Minimized Electron windows report a hidden document while their real UI
+  // remains rendered. Use element visibility and the controller's fresh room
+  // identity, so dispatch never needs to activate the user's desktop window.
+  for(const action of allowed){
     const matches=[...document.querySelectorAll('[data-ix-action="'+action+'"]')].filter(shown);
     if(matches.length!==1)continue;
     const element=matches[0],scope=scopes.find(s=>s.contains(element));
@@ -43,7 +46,7 @@ export function nativeBattleDocument(allowed,command){
     if(action==='cohostMode.getStarted'&&!scope.querySelector('[data-ix-action="match.select"][data-ix-selected="true"],[data-ix-action="match.individual.select"][data-ix-selected="true"],[data-ix-action="match.team.select"][data-ix-selected="true"]'))continue;
     buttons.push({action,enabled:enabled(element),selected:attr(element,'selected')==='true'});
   }
-  const value={ready:document.visibilityState==='visible',scopes:scopes.map(scopeInfo),buttons};
+  const value={ready:true,scopes:scopes.map(scopeInfo),buttons};
   const identity=JSON.stringify(value);
   if(!command)return{...value,identity};
   if(identity!==command.identity)return{clicked:false,error:'BATTLE_CHANGED'};

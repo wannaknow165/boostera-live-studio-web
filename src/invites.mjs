@@ -17,8 +17,10 @@ export class InviteController {
     if(snapshot.health!=='ready')throw new InviteError('STUDIO_NOT_READY');
     if(snapshot.session.selfUid===uid)throw new InviteError('SELF_INVITE_NOT_ALLOWED');
     const user=snapshot.users?.[uid];
-    if(!user||!user.availableActions?.invite||user.linked)throw new InviteError('TARGET_UNAVAILABLE');
-    if(user.invited||(snapshot.operations||[]).some(op=>op.targetUid===uid&&op.outcome==='pending'))throw new InviteError('INVITATION_ALREADY_PENDING');
+    const nativeTarget=this.getState().session?.epoch===epoch&&this.getState().candidates?.some(p=>p.uid===uid&&p.nativeObserved&&p.inviteAvailable);
+    const nativeAllowed=nativeTarget&&snapshot.availability?.manual_cohost?.allowed===true;
+    if(snapshot.availability?.manual_cohost?.allowed===false||user?.linked||user?.availableActions?.invite===false||(!user?.availableActions?.invite&&!nativeAllowed))throw new InviteError('TARGET_UNAVAILABLE');
+    if(user?.invited||(snapshot.operations||[]).some(op=>op.targetUid===uid&&op.outcome==='pending'))throw new InviteError('INVITATION_ALREADY_PENDING');
     return snapshot;
   }
   cleanup(){

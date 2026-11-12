@@ -13,9 +13,9 @@ test('gift streak is counted exactly once at final event',()=>{
 });
 test('battle messages keep IDs and reset previous scores on another battle',()=>{
  const fired=[],events=new LiveEvents({onAutomation:e=>fired.push(e)});const now=Math.floor(Date.now()/1000);
- events.ingest('linkMicBattle',{battleId:'90071992547409931234',action:1,battleSettings:{startTime:now,endTime:now+240},anchorsInfo:[{value:{user:{id:'123',displayId:'creator'}}}]});
+ events.ingest('linkMicBattle',{battleId:'90071992547409931234',action:4,battleSettings:{startTimeMs:String(now*1000),endTimeMs:String((now+240)*1000),status:1},anchorsInfo:[{value:{user:{id:'123',displayId:'creator'}}}]});
  events.ingest('linkMicArmies',{battleId:'90071992547409931234',armies:[{key:'123',value:{points:'50'}}]});
- assert.equal(events.state.battle.scores[0].score,50);assert.equal(events.state.battle.id,'90071992547409931234');assert.equal(fired.length,1);
+ assert.equal(events.state.battle.scores[0].score,'50');assert.equal(events.state.battle.id,'90071992547409931234');assert.equal(fired.length,1);
  events.ingest('linkMicBattle',{battleId:'second',action:99});assert.deepEqual(events.state.battle.scores,[]);assert.equal(fired.length,1);
 });
 test('public connection lifecycle is driven by actual connector success',async()=>{
@@ -26,4 +26,20 @@ test('public connection lifecycle is driven by actual connector success',async()
 });
 test('failed TikTok signing never reports connected',async()=>{
  const events=new LiveEvents({factory:()=>({on(){},connect(){throw Error('signing unavailable');},disconnect(){}})});const state=await events.connect('wanna');assert.equal(state.status,'error');assert.equal(state.error,'CONNECTION_FAILED_OR_SIGNING_REQUIRED');
+});
+test('v3 battle score, contributor and millisecond lifecycle fields reach the snapshot exactly',()=>{
+ const fired=[],events=new LiveEvents({onAutomation:e=>fired.push(e)}),now=Date.now(),id='9007199254740993999';
+ const settings={battleId:id,startTimeMs:String(now),endTimeMs:String(now+240000),duration:240,status:1};
+ events.ingest('linkMicBattle',{battleId:id,action:4,battleSettings:settings,anchorsInfo:[{key:'11',value:{user:{userId:'11',displayId:'host',nickName:'Host'}}},{key:'22',value:{user:{userId:'22',displayId:'opponent',nickName:'Opponent'}}}]});
+ events.ingest('linkMicArmies',{battleId:id,battleSettings:settings,triggerReason:1,armies:{'11':{hostscore:'9007199254740993001',userArmies:[{userIdStr:'333',score:'500',nickname:'Supporter'}]},'22':{hostscore:'450',userArmies:[]}}});
+ assert.equal(events.state.battle.status,'active');assert.equal(events.state.battle.startTimeMs,now);assert.equal(events.state.battle.scores[0].score,'9007199254740993001');assert.equal(events.state.battle.scores[0].contributors[0].id,'333');assert.equal(events.state.participants[1].name,'Opponent');assert.equal(fired.length,1);
+ events.ingest('linkMicBattle',{battleId:id,action:5,battleSettings:{...settings,status:2},battleResult:{'11':{userId:'11',score:'9007199254740993002'},'22':{userId:'22',score:'460'}}});
+ assert.equal(events.state.battle.status,'ended');assert.equal(events.state.participants.length,2);assert.equal(events.state.battle.scores[1].score,'460');
+ events.ingest('linkMicArmies',{battleId:id,triggerReason:4,armies:{'11':{hostscore:'9007199254740993002'}}});assert.equal(events.state.battle.status,'ended');
+ events.ingest('linkMicArmies',{battleId:'new-round',triggerReason:1,armies:{'44':{hostscore:'1'}}});assert.equal(events.state.participants.length,0);assert.equal(events.state.battle.scores.length,1);
+});
+test('an invitation is not a started battle and BATTLE_END ends score-only rounds',()=>{
+ const fired=[],events=new LiveEvents({onAutomation:e=>fired.push(e)}),battleId='round';
+ events.ingest('linkMicBattle',{battleId,action:1,battleSettings:{startTimeMs:String(Date.now()),duration:240,status:0}});assert.equal(events.state.battle.status,'pending');assert.equal(fired.length,0);
+ events.ingest('linkMicArmies',{battleId,triggerReason:2,armies:{'1':{hostscore:'15'}}});assert.equal(events.state.battle.status,'ended');
 });

@@ -28,7 +28,7 @@ Or double-click `START.cmd`. No npm dependencies are required for this panel. Op
 
 The panel reads real Studio state and creator lists. Confirmed outgoing Co-host invitations use the creator's native Studio button. The Match panel also exposes native battle mode selection, invitation start, acceptance, decline and withdrawal when their original controls are loaded and enabled. Native clicks are reported as awaiting Studio; only an observed battle state can establish that a battle opened. Incoming Co-host invitations, automatic matching and opening the original panels still require Studio. This panel does not include video, audio, scores or a battle timer.
 
-The connector reads state and invokes those controls through the existing local bridge without moving the mouse, typing on the user's keyboard or activating Studio. Studio can remain behind other windows. Minimized or hidden renderer documents are deliberately not actionable; keep Studio open without minimizing it. The explicit **Focus Studio** button is the only dashboard control intended to activate its window. Public battle delivery and opponent media still require a real two-creator test; local tests do not establish these outcomes.
+The connector reads state and invokes those controls through the existing local bridge without moving the mouse, typing on the user's keyboard or activating Studio. Studio can remain behind other windows or minimized. The adapter checks the original control's rendered visibility, enabled state, current room and session identity; a minimized Electron document is not itself treated as a disabled control. The explicit **Focus Studio** button is the only dashboard control intended to activate its window. Public battle delivery and opponent media still require a real two-creator test; local tests do not establish these outcomes.
 
 ### Mobile camera and effects
 
@@ -73,6 +73,7 @@ These tests do not prove a real TikTok broadcast, successful delivery of a Co-ho
 - [מדריך קצר בעברית](docs/README-HE.md)
 - [Studio connection and limits](docs/STUDIO.md)
 - [Android room connection and test results](docs/PHONE-LINK.md)
+- [Live verification and background-control fixes](docs/LIVE-VERIFICATION.md)
 - [Mobile app guide](server-integration/wanna-studio-server/MOBILE.md)
 - [Effects server and APIs](server-integration/wanna-studio-server/README.md)
 - [Studio upstream configuration](server-integration/wanna-studio-server/STUDIO-CONNECT.md)

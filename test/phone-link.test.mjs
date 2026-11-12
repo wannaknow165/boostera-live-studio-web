@@ -49,3 +49,16 @@ test('an active broadcast cannot have its destination replaced',async t=>{
   const link=new PhoneLink({directory,fetcher:async()=>{calls++;return{ok:true,json:async()=>({broadcasts:[{mode:'rtmp',state:'running'}]})}}});
   await assert.rejects(link.importTarget(),{code:'PHONE_BROADCAST_ALREADY_ACTIVE'});assert.equal(calls,1);
 });
+
+test('unlinking a stopped phone room clears its target and releases the Studio room guard',async t=>{
+  const directory=await fixture(t);let configured=false,active=false;
+  const link=new PhoneLink({directory,stateFile:path.join(directory,'binding.json'),fetcher:async(url,options)=>{
+    if(options?.method==='PUT')configured=!JSON.parse(options.body).clear;
+    return{ok:true,json:async()=>options?.method==='PUT'?{rtmpConfigured:configured}:{broadcasts:active?[{mode:'rtmp',state:'running'}]:[]}};
+  }});
+  await link.importTarget();active=true;
+  await assert.rejects(link.unlink(),{code:'PHONE_BROADCAST_ALREADY_ACTIVE'});assert.equal(configured,true);
+  active=false;assert.deepEqual(await link.unlink(),{unlinked:true});assert.equal(configured,false);
+  await link.assertRoom('another-room');
+  const restored=new PhoneLink({directory,stateFile:path.join(directory,'binding.json')});await restored.assertRoom('another-room');
+});

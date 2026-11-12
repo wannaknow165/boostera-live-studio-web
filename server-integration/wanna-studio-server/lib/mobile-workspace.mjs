@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import {LiveEvents} from './mobile-live-events.mjs';
 import {videoModels,generateRemix,resumeVideo} from './mobile-generation.mjs';
 import {Broadcasts} from './mobile-broadcast.mjs';
+import {readCapturedTarget} from './mobile-rtmp-import.mjs';
 import {configureMediaTools} from './mobile-tools.mjs';
 export const ANCHORS=['screen','head','eyes','chest','shoulderL','shoulderR','handL','handR','waist','body'];
 const fail=(code,status=400)=>Object.assign(Error(code),{status});
@@ -122,6 +123,7 @@ export function createWorkspace({root,upstreamPort=8800,apiKey='',clientKey='',e
       if(!['rtmp:','rtmps:'].includes(destination.protocol)||destination.username||destination.password)throw fail('INVALID_RTMP_URL');
       db.rtmp={url:destination.href,key:text(b.key,500),host:destination.hostname};save();return send(res,200,config());
     }
+    if(p==='/api/workspace/rtmp/import'&&req.method==='POST'){db.rtmp=readCapturedTarget(env.RTMP_IMPORT_FILE);save();return send(res,200,config());}
     if(p==='/api/workspace/broadcast/start'&&req.method==='POST'){if(!tools.installed)throw fail('MEDIA_TOOLS_REQUIRED',409);const b=await json(req);return send(res,201,broadcasts.start({mode:b.mode,mime:b.mime,owner:session.id}));}
     const match=/^\/api\/workspace\/broadcast\/([a-f0-9]{24})\/(chunk|stop|files\/(.+))$/.exec(p);
     if(match){const [,stream,action,name]=match;

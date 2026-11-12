@@ -8,6 +8,7 @@ import {RpcClient} from './src/rpc.mjs';
 import {normalizeSnapshot,summarizeChanges} from './src/model.mjs';
 import {NativeUi} from './src/native-ui.mjs';
 import {InviteController} from './src/invites.mjs';
+import {BattleController,NativeBattleUi} from './src/battles.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
 const assets=new Map([['/',['index.html','text/html; charset=utf-8']],['/app.js',['app.js','text/javascript; charset=utf-8']],['/style.css',['style.css','text/css; charset=utf-8']]]);
 export function requestAllowed(req,port,token,api=true){
@@ -18,13 +19,14 @@ export function requestAllowed(req,port,token,api=true){
   if(!api)return true;
   return(req.headers.cookie||'').split(';').some(c=>c.trim()==='boostera_session='+token);
 }
-export function createApp({port=47831,service=new RpcClient(9225),polling=true,focus=focusStudio,nativeUi=new NativeUi()}={}){
+export function createApp({port=47831,service=new RpcClient(9225),polling=true,focus=focusStudio,nativeUi=new NativeUi(),battleUi=new NativeBattleUi()}={}){
   const token=crypto.randomBytes(32).toString('hex');
   let state={connected:false,live:false,candidates:[],operations:[],battle:null,events:[],error:'CONNECTING'};
   let running=false,lastCandidatesAt=0,batches={},batchEpoch,self=null,lastUserAt=0;
   const history=[];
   let nativeStatus={ready:false},lastNativeAt=0;
   const invites=new InviteController({service,ui:nativeUi,getState:()=>state});
+  const battles=new BattleController({service,ui:battleUi});
   async function poll(){
     if(running)return;
     running=true;
@@ -60,6 +62,11 @@ export function createApp({port=47831,service=new RpcClient(9225),polling=true,f
     if(url.pathname.startsWith('/api/')){
       if(!requestAllowed(req,port,token))return send(401,{error:'OPEN_PANEL_FIRST'});
       if(url.pathname==='/api/state'&&req.method==='GET')return send(200,state);
+      if(url.pathname==='/api/battles'&&req.method==='GET')return send(200,await battles.state());
+      if(url.pathname==='/api/battles/action'&&req.method==='POST'){
+        try{const receipt=await battles.execute(await readJson(req));await poll();return send(200,receipt);}
+        catch(error){return send(error.status||503,{error:error.code||error.message||'BATTLE_ACTION_FAILED'});}
+      }
       if(url.pathname==='/api/refresh'&&req.method==='POST'){await poll();return send(200,{ok:true,connected:state.connected});}
       if((url.pathname==='/api/invites/prepare'||url.pathname==='/api/invites/send')&&req.method==='POST'){
         try{

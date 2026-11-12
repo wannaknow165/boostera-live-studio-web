@@ -1,11 +1,12 @@
 export class NativeUi {
   constructor({fetcher=fetch,Socket=WebSocket,timeout=3000}={}){Object.assign(this,{fetcher,Socket,timeout});this.nextId=0;}
-  async connect(){
+  async connect(surface='popupMulti'){
+    if(!['popupMulti','main'].includes(surface))throw new Error('INVALID_NATIVE_SURFACE');
     const response=await this.fetcher('http://127.0.0.1:9222/json/list',{signal:AbortSignal.timeout(this.timeout)});
     const pages=await response.json();
     const page=pages.find(p=>{
       if(p.type!=='page')return false;
-      try{const u=new URL(p.url);return u.protocol==='file:'&&/^\/C:\/Program Files\/TikTok LIVE Studio\/[\d.]+\/resources\/app\/+html\/popupMulti\/index\.html$/i.test(decodeURIComponent(u.pathname));}catch{return false;}
+      try{const u=new URL(p.url);return u.protocol==='file:'&&new RegExp('^/C:/Program Files/TikTok LIVE Studio/[\\d.]+/resources/app/+html/'+surface+'/index\\.html$','i').test(decodeURIComponent(u.pathname));}catch{return false;}
     });
     if(!page)throw new Error('NATIVE_PANEL_UNAVAILABLE');
     const endpoint=new URL(page.webSocketDebuggerUrl);

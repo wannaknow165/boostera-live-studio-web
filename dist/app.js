@@ -2,6 +2,7 @@
 const $=id=>document.getElementById(id);
 const local=location.protocol==='http:'&&['127.0.0.1','localhost'].includes(location.hostname)&&location.port==='47831';
 let inviteDraft=null,inviteBusy=false;
+let battleControl=null,battleBusy=false,battleLoading=false,battleReceipt=null;
 let state={connected:false,candidates:[],operations:[],events:[]},tab='all',busy=false,toastTimer,requestVersion=0;
 const set=(id,text)=>{$(id).textContent=text;};
 const time=value=>new Date(value).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
@@ -174,4 +175,43 @@ $('confirm-invite').addEventListener('click',async()=>{
   finally{inviteBusy=false;$('invite-dialog').close();renderCandidates();void update();}
 });
 
-render();if(local){void update();setInterval(update,1800);}
+function renderBattleControls(){
+  const connected=state.connected&&battleControl?.available;
+  set('battle-controls-status',connected?'מחובר ל־Match':'ממתין ל־Match');
+  const actions=$('battle-controls-actions');actions.replaceChildren();
+  const scopes=battleControl?.scopes||[],incoming=scopes.find(s=>s.role==='invitee');
+  const waiting=scopes.find(s=>s.role==='inviter');
+  let message=!local?'פתח את הפאנל המקומי כדי לשלוט בבאטל.':!connected?'ממתין לחיבור ל־Studio ולשידור פעיל.':incoming?'התקבלה הזמנת באטל. אפשר לקבל או לדחות כאן.':waiting?'הזמנת באטל ממתינה לתשובת הצד השני.':battleControl.actions.length?'בחר את הפעולה הבאה לבאטל.':'חבר יוצר ב־Co-host ופתח את Match בסטודיו. הפקדים הזמינים יופיעו כאן.';
+  if(state.battle?.status==='open')message='TikTok מדווח על באטל פעיל.';
+  if(battleBusy)message='מעביר את הפעולה ל־Studio…';
+  else if(battleReceipt)message=battleReceipt;
+  set('battle-controls-message',message);
+  if(!connected)return;
+  for(const control of battleControl.actions){
+    const button=document.createElement('button');button.className='button '+(['match.accept','match.start','cohostMode.getStarted'].includes(control.action)?'mint':'secondary');
+    button.dataset.battleAction=control.action;button.textContent=control.label+(control.selected?' ✓':'');
+    button.disabled=battleBusy||inviteBusy||!control.enabled||control.selected;
+    button.addEventListener('click',()=>performBattleAction(control.action));actions.append(button);
+  }
+}
+async function updateBattleControls(){
+  if(!local||battleLoading||battleBusy)return;battleLoading=true;
+  try{
+    const response=await fetch('/api/battles',{cache:'no-store',signal:AbortSignal.timeout(7000)});
+    if(!response.ok)throw new Error();const next=await response.json();
+    if(next.revision!==battleControl?.revision)battleReceipt=null;
+    battleControl=next;
+  }catch{battleControl=null;battleReceipt=null;}
+  finally{battleLoading=false;renderBattleControls();}
+}
+async function performBattleAction(action){
+  if(battleBusy||!battleControl?.available)return;
+  const observed=battleControl;battleBusy=true;battleReceipt=null;renderBattleControls();
+  try{
+    const receipt=await inviteRequest('/api/battles/action',{action,revision:observed.revision,epoch:observed.epoch,requestId:crypto.randomUUID()});
+    battleReceipt=receipt.dispatched===true?'הפעולה הועברה ל־Studio. ממתינים לעדכון מצב הבאטל.':'לא התקבל אישור לפעולה. בדוק את מצב הבאטל בסטודיו לפני ניסיון נוסף.';
+  }catch(error){
+    battleReceipt=['BATTLE_CHANGED','SESSION_CHANGED'].includes(error.message)?'ההזמנה או המשתתפים השתנו. המצב מתרענן; בחר שוב.':error.message==='BATTLE_ACTION_UNAVAILABLE'?'הפעולה אינה זמינה עוד בסטודיו.':'לא ניתן לאמת את תוצאת הפעולה. בדוק בסטודיו לפני ניסיון נוסף.';
+  }finally{battleBusy=false;renderBattleControls();void update();}
+}
+render();renderBattleControls();if(local){void update();void updateBattleControls();setInterval(update,1800);setInterval(updateBattleControls,2400);}

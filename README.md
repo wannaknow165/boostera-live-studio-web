@@ -26,7 +26,9 @@ node server.mjs --open
 
 Or double-click `START.cmd`. No npm dependencies are required for this panel. Open the local debugging bridge and the Co-host panel using the instructions in [Studio connection guide](docs/STUDIO.md). Do not restart Studio during a broadcast.
 
-The panel reads real Studio state and creator lists. Confirmed outgoing Co-host invitations use the creator's native Studio button. Incoming invitation acceptance, rejection, automatic matching and starting a battle still require the original Studio interface. This panel does not include video, audio, scores or a battle timer.
+The panel reads real Studio state and creator lists. Confirmed outgoing Co-host invitations use the creator's native Studio button. The Match panel also exposes native battle mode selection, invitation start, acceptance, decline and withdrawal when their original controls are loaded and enabled. Native clicks are reported as awaiting Studio; only an observed battle state can establish that a battle opened. Incoming Co-host invitations, automatic matching and opening the original panels still require Studio. This panel does not include video, audio, scores or a battle timer.
+
+The connector reads state and invokes those controls through the existing local bridge without moving the mouse, typing on the user's keyboard or activating Studio. Studio can remain behind other windows. Minimized or hidden renderer documents are deliberately not actionable; keep Studio open without minimizing it. The explicit **Focus Studio** button is the only dashboard control intended to activate its window. Public battle delivery and opponent media still require a real two-creator test; local tests do not establish these outcomes.
 
 ### Mobile camera and effects
 

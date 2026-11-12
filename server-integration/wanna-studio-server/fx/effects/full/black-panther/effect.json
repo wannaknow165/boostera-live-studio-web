@@ -1,0 +1,48 @@
+{
+  "id": "black-panther",
+  "posture": "sit",
+  "category": "full",
+  "title": "פנתר שחור",
+  "summary": "הסטרימר הופך לפנתר שחור מפלצתי בחדר עולה באש ומזנק לעבר המצלמה.",
+  "duration": 10,
+  "source": "capcaro-132",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#FF6A00",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Streamer sits at desk, camera zooms in to extreme close-up on eyes."
+    },
+    {
+      "t": 2,
+      "what": "Eyes glow orange, black veins crack across skin, fangs and feline nose appear."
+    },
+    {
+      "t": 3,
+      "what": "Black fur and panther ears grow across half the face, shirt tears."
+    },
+    {
+      "t": 5,
+      "what": "Full black panther head forms, roaring at camera."
+    },
+    {
+      "t": 6,
+      "what": "Muscular black panther body bursts through clothes as room catches fire behind."
+    },
+    {
+      "t": 7,
+      "what": "Were-panther lunges forward on all fours with giant claws toward the lens."
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and the camera rapidly zooms into an extreme close-up of their face. Keep the person recognizable until the transformation covers the face. Their eyes ignite into glowing amber-orange feline eyes as dark black cracks spread across their skin. They snarl, growing sharp fangs and a black feline nose. Black fur and panther ears spread across their face as the camera pulls back. Their head fully morphs into a ferocious, roaring black panther. Their body expands into a massive, muscular black-furred beast with giant claws, shredding their shirt. The room behind them erupts into bright orange flames, and the panther creature lunges forward at the camera with claws extended. Cinematic dark lighting with fiery orange rim light, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

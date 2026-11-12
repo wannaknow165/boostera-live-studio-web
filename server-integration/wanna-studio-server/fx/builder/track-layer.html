@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Track layer eyes</title></head>
+<body style="background:#111;color:#ddd;font:14px monospace">
+<div id="s">loading…</div>
+<script type="module">
+// Self-anchoring for a green effect layer: finds the two glowing eyes inside the layer itself, frame by frame,
+// so the layer can be placed on any streamer's eyes without the original reference video.
+// Usage: /builder/track-layer.html?fx=<effect dir>&src=green/green-src.mp4
+const q = new URLSearchParams(location.search), fxDir = q.get('fx'), srcFile = q.get('src') || 'green/green-src.mp4';
+const s = document.getElementById('s');
+const v = document.createElement('video'); v.muted = true; v.src = `/effects/${fxDir}/${srcFile}`;
+await new Promise(r => v.onloadeddata = r);
+const fps = 24, n = Math.round(v.duration * fps), W = 180, H = Math.round(180 * v.videoHeight / v.videoWidth);
+const c = document.createElement('canvas'); c.width = W; c.height = H; const ctx = c.getContext('2d', { willReadFrequently: true });
+const frames = [];
+for (let i = 0; i < n; i++) {
+  v.currentTime = (i + 0.5) / fps; await new Promise(r => v.onseeked = r);
+  ctx.drawImage(v, 0, 0, W, H); const d = ctx.getImageData(0, 0, W, H).data;
+  // glowing eye pixels: very bright, blue dominant (not green screen, not white sparkles only)
+  const pts = [];
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const p = (y * W + x) * 4, r = d[p], g = d[p + 1], b = d[p + 2]; if (b > 200 && b > g + 25 && r < 210 && g < 210 && b + g + r > 380) pts.push([x, y]); }
+  let ok = false;
+  if (pts.length >= 6 && pts.length < W * H * 0.04) {
+    // split into two clusters by x around the median, then check they look like a pair of eyes
+    const xs = pts.map(p => p[0]).sort((a, b) => a - b), mx = xs[xs.length >> 1];
+    const A = pts.filter(p => p[0] < mx), B = pts.filter(p => p[0] >= mx);
+    const cen = P => [P.reduce((s, p) => s + p[0], 0) / P.length, P.reduce((s, p) => s + p[1], 0) / P.length];
+    if (A.length >= 3 && B.length >= 3) {
+      const a = cen(A), b = cen(B), dist = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (dist > W * 0.06 && dist < W * 0.45 && Math.abs(b[1] - a[1]) < dist * 0.5) {
+        ok = true;
+        // iris distance is ~0.45 of the 234-454 face width used by the engine
+        frames.push({ i, eyes: [(a[0] + b[0]) / 2 / W, (a[1] + b[1]) / 2 / H], top: [(a[0] + b[0]) / 2 / W, ((a[1] + b[1]) / 2 - dist * 0.9) / H], chin: [(a[0] + b[0]) / 2 / W, ((a[1] + b[1]) / 2 + dist * 1.3) / H], faceW: dist / 0.45 / W, roll: Math.atan2(b[1] - a[1], b[0] - a[0]) });
+      }
+    }
+  }
+  if (!ok) frames.push({ i, none: true });
+  if (i % 20 === 0) s.textContent = `frame ${i}/${n}`;
+}
+const track = { fps, width: v.videoWidth, height: v.videoHeight, source: 'layer-eyes', frames };
+const res = await fetch(`/save?name=track-${fxDir}.json`, { method: 'POST', body: JSON.stringify(track) });
+s.textContent = 'DONE ' + (await res.text()) + ' eyes=' + frames.filter(f => !f.none).length + '/' + n;
+window.trackDone = s.textContent;
+</script></body></html>

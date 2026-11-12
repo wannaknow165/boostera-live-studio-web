@@ -1,0 +1,48 @@
+{
+  "id": "winged-ice-queen",
+  "posture": "stand",
+  "category": "full",
+  "title": "מלכת הקרח המכונפת",
+  "summary": "הסטרימרית מתרחקת מהמצלמה בעיניים זוהרות בכחול, זרועה קופאת ובפיצוץ כפור היא הופכת לדמות קרח גבישית מכונפת עם ליבה זוהרת בחזה.",
+  "duration": 10,
+  "source": "capcaro-094",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#00BFFF",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Close-up of face with glowing icy-blue eyes, stepping back into full body standing pose"
+    },
+    {
+      "t": 0.8,
+      "what": "Right arm encases in glowing blue ice claws as frost swirls around feet"
+    },
+    {
+      "t": 1.6,
+      "what": "Burst of white frost mist engulfs the body, glowing diamond core appears on chest"
+    },
+    {
+      "t": 2.6,
+      "what": "Mist clears revealing full crystalline blue ice creature with large jagged ice wings"
+    },
+    {
+      "t": 4.8,
+      "what": "Camera pushes into close-up of crystalline ice face with spiky crown and glowing blue eyes"
+    },
+    {
+      "t": 9.8,
+      "what": "Ice figure reaches a jagged crystalline hand toward the camera"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and starts close to the camera as their eyes ignite with a bright icy-blue glow, then steps back into a full standing pose. Keep the person recognizable until the full ice transformation covers their face. Their right arm encases in glowing blue crystalline ice with sharp claws while white frost mist swirls around their feet. A sudden burst of freezing white mist engulfs them, and they transform completely into a towering crystalline blue ice being with jagged ice shards across the body, a spiky ice crown, a glowing diamond-shaped blue core in the chest, and massive translucent blue ice wings spreading wide. The camera pushes in to a close-up of the faceted blue ice face with piercing glowing cyan eyes as they reach a sharp crystalline claw hand toward the lens. Cinematic cold blue neon lighting, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

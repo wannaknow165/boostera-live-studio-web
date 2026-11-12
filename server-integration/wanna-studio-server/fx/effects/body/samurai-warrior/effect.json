@@ -1,0 +1,56 @@
+{
+  "id": "samurai-warrior",
+  "posture": "sit",
+  "category": "body",
+  "title": "לוחם סמוראי",
+  "summary": "היוצר יושב בחדרו, עיניו זוהרות בזהב והוא הופך ללוחם סמוראי משוריין השולף חרב זוהרת.",
+  "duration": 10,
+  "source": "capcaro-167",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#FFA500",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Creator sits at desk looking at camera"
+    },
+    {
+      "t": 1,
+      "what": "Eyes erupt in golden lightning and fire"
+    },
+    {
+      "t": 3,
+      "what": "Hair rises into a topknot as fists clench"
+    },
+    {
+      "t": 4,
+      "what": "Shirt splits open revealing black and gold dragon samurai armor"
+    },
+    {
+      "t": 5,
+      "what": "Full armor forms on shoulders and arms as eye glow fades"
+    },
+    {
+      "t": 6,
+      "what": "Draws a katana behind head"
+    },
+    {
+      "t": 7,
+      "what": "Slashes katana creating a golden lightning ring and smoke"
+    },
+    {
+      "t": 9,
+      "what": "Points forward at the camera"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and suddenly their eyes erupt with bright golden lightning and fire. Keep the person recognizable throughout the transformation. They clench their fists as their hair pulls up into a samurai topknot. Their casual shirt tears open and vanishes as ornate black and gold samurai armor with embossed twin dragons materializes across their chest, shoulders, and arms. The eye glow fades, and they draw a gleaming katana from behind their back, slashing it forward to unleash a swirling ring of golden lightning and a burst of smoke before pointing directly at the camera. Cinematic lighting with warm golden energy reflections, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

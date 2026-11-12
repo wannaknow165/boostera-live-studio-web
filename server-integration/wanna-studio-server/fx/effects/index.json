@@ -1,0 +1,226 @@
+[
+  {
+    "id": "werelion-beast",
+    "dir": "face/werelion-beast",
+    "title": "אריה פראי",
+    "posture": "sit",
+    "category": "face",
+    "duration": 10
+  },
+  {
+    "id": "anubis",
+    "dir": "face/anubis",
+    "title": "אנוביס",
+    "posture": "sit",
+    "category": "face",
+    "duration": 15.6
+  },
+  {
+    "id": "raven-witch-2",
+    "dir": "face/raven-witch-2",
+    "title": "עורב מכשפה 2",
+    "posture": "sit",
+    "duration": 14.6,
+    "category": "face"
+  },
+  {
+    "id": "raven-witch-green",
+    "dir": "face/raven-witch-green",
+    "title": "עורב מכשפה (שכבה ירוקה)",
+    "posture": "sit",
+    "duration": 9.6,
+    "category": "face"
+  },
+  {
+    "id": "raven-witch",
+    "dir": "face/raven-witch",
+    "title": "עורב מכשפה (מנוע)",
+    "posture": "sit",
+    "duration": 10.5,
+    "category": "face"
+  },
+  {
+    "id": "fantasy-montage",
+    "dir": "full/fantasy-montage",
+    "title": "אוסף דמויות פנטזיה",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "ice-warrior",
+    "dir": "full/ice-warrior",
+    "title": "לוחמת הקרח",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "elemental-beast-warrior",
+    "dir": "full/elemental-beast-warrior",
+    "title": "לוחמת חיות הקסם",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "silver-cobra",
+    "dir": "full/silver-cobra",
+    "title": "קוברה כסופה",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "ice-dragon",
+    "dir": "body/ice-dragon",
+    "title": "מלכת דרקון הקרח",
+    "posture": "sit",
+    "category": "body",
+    "duration": 10
+  },
+  {
+    "id": "winged-ice-queen",
+    "dir": "full/winged-ice-queen",
+    "title": "מלכת הקרח המכונפת",
+    "posture": "stand",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "ice-dragon-095",
+    "dir": "full/ice-dragon-095",
+    "title": "דרקון קרח",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "arcane-assassin",
+    "dir": "full/arcane-assassin",
+    "title": "מתנקשת סגולה",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "void-wraith",
+    "dir": "full/void-wraith",
+    "title": "אדון הריק הסגול",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "black-panther",
+    "dir": "full/black-panther",
+    "title": "פנתר שחור",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "demon-veins",
+    "dir": "body/demon-veins",
+    "title": "השתלטות שד",
+    "posture": "sit",
+    "category": "body",
+    "duration": 10
+  },
+  {
+    "id": "cyber-assassin",
+    "dir": "full/cyber-assassin",
+    "title": "מתנקשת סייבר סגולה",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "phoenix-warrior",
+    "dir": "full/phoenix-warrior",
+    "title": "לוחמת הפניקס",
+    "posture": "stand",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "lightning-dragon-popcorn",
+    "dir": "full/lightning-dragon-popcorn",
+    "title": "ברק, דרקון ופופקורן",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "fire-phoenix",
+    "dir": "full/fire-phoenix",
+    "title": "עוף החול הבוער",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "orca-lion",
+    "dir": "face/orca-lion",
+    "title": "לוויתן ואריה",
+    "posture": "sit",
+    "category": "face",
+    "duration": 10
+  },
+  {
+    "id": "lava-kaiju",
+    "dir": "full/lava-kaiju",
+    "title": "גודזילה ועין האש",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "samurai-warrior",
+    "dir": "body/samurai-warrior",
+    "title": "לוחם סמוראי",
+    "posture": "sit",
+    "category": "body",
+    "duration": 10
+  },
+  {
+    "id": "barbarian-warrior",
+    "dir": "full/barbarian-warrior",
+    "title": "לוחם ברברים",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "shadow-knight",
+    "dir": "full/shadow-knight",
+    "title": "אביר הצללים",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "golden-phoenix",
+    "dir": "full/golden-phoenix",
+    "title": "עוף החול המוזהב",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "lightning-dragon",
+    "dir": "full/lightning-dragon",
+    "title": "אדון הדרקונים",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  },
+  {
+    "id": "golden-stag",
+    "dir": "full/golden-stag",
+    "title": "אייל זהב",
+    "posture": "sit",
+    "category": "full",
+    "duration": 10
+  }
+]

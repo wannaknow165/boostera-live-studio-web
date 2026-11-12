@@ -1,0 +1,44 @@
+{
+  "id": "arcane-assassin",
+  "posture": "sit",
+  "category": "full",
+  "title": "מתנקשת סגולה",
+  "summary": "הסטרימרית קמה מהכיסא והופכת ללוחמת מכושפת בשריון שחור-זהב עם עיניים ורונות זוהרות בסגול.",
+  "duration": 10,
+  "source": "capcaro-110",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#9D4EDD",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Eyes flash with purple lightning while sitting"
+    },
+    {
+      "t": 1,
+      "what": "Dark smoke appears at neck, metallic mask and shoulder armor form"
+    },
+    {
+      "t": 3,
+      "what": "Stands up as full hooded dark armor with glowing purple runes materializes"
+    },
+    {
+      "t": 5,
+      "what": "Steps forward, dark smoke swirls, glowing purple magic circle appears behind head"
+    },
+    {
+      "t": 8,
+      "what": "Raises right hand channeling purple lightning energy"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and suddenly their eyes flash with bright purple lightning. Keep the person recognizable until the mask covers the face. Dark smoke rises around their neck as a metallic fantasy mask with glowing purple eyes and dark shoulder armor materialize over them. They stand up from their chair as full black and gold ornate armor with a dark hood and glowing purple runes spreads across their entire body. Stepping forward, dark smoke swirls around their legs, floating purple crystals appear, and a large glowing purple arcane circle materializes behind their head. They raise one gloved hand, crackling with purple lightning. Dark cinematic lighting with vibrant purple neon glow, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

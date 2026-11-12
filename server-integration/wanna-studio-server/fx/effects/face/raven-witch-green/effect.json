@@ -1,0 +1,66 @@
+{
+  "id": "raven-witch-green",
+  "posture": "sit",
+  "title": "עורב מכשפה (שכבה ירוקה)",
+  "summary": "שכבת האפקט מהסרטון הירוק, ממוקמת על הראש של המשדרת; היא נעלמת והעורב עף",
+  "reference": "reference.mp4",
+  "duration": 9.6,
+  "requires": [
+    "frontal",
+    "face",
+    "eyes",
+    "shoulders",
+    "body"
+  ],
+  "assets": [
+    {
+      "id": "fxlayer",
+      "type": "layer",
+      "file": "green/layer.webm",
+      "track": "green/track.json"
+    },
+    {
+      "id": "room",
+      "type": "image",
+      "file": "room.jpg",
+      "key": false
+    }
+  ],
+  "timeline": [
+    {
+      "t": 0.3,
+      "d": 0.8,
+      "do": "faceMorph"
+    },
+    {
+      "do": "background",
+      "d": 9.6,
+      "t": 0,
+      "image": "room",
+      "fade": 0.7
+    },
+    {
+      "do": "layer",
+      "asset": "fxlayer",
+      "d": 8.75,
+      "t": 0,
+      "scale": 1.1
+    },
+    {
+      "do": "vanish",
+      "d": 1,
+      "t": 1.2
+    },
+    {
+      "do": "return",
+      "d": 0.9,
+      "t": 8.4
+    }
+  ],
+  "category": "face",
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and transforms with dark purple magic in one continuous shot. A purple velvet witch hat with a gold eagle medallion drops onto their head in a swirl of purple sparks, their eyes start glowing bright blue, their face darkens into shadow, and glossy black raven feathers spread over their body. In a burst of purple light they transform into a huge black raven with glowing purple-tipped wings wearing the small witch hat, which flaps its wings and flies up and away. Keep the same person recognizable until the transformation. Photorealistic, dramatic purple and blue lighting, vertical framing, static camera."
+  },
+  "returnColor": "#a259ff"
+}

@@ -1,0 +1,44 @@
+{
+  "id": "shadow-knight",
+  "posture": "sit",
+  "category": "full",
+  "title": "אביר הצללים",
+  "summary": "היוצרת הופכת ללוחם צללים אפל בשריון שחור-סגול זוהר עם עיניים בוהקות.",
+  "duration": 10,
+  "source": "capcaro-179",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#A855F7",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Normal face looking at camera"
+    },
+    {
+      "t": 2,
+      "what": "Eyes glow purple, black veins spread around eyes and neck"
+    },
+    {
+      "t": 4,
+      "what": "Glossy black symbiotic armor creeps up neck and lower face, dark shards float"
+    },
+    {
+      "t": 6,
+      "what": "Full spiked black mask covers face, armor covers chest"
+    },
+    {
+      "t": 8,
+      "what": "Spiked helmet replaces beanie, purple lightning crackles, clawed hand reaches toward camera"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and undergoes a dark fantasy transformation in one continuous 10-second shot. Keep the person recognizable at first as their eyes suddenly glow bright neon purple and black vein-like markings spread across their temples. Glossy, liquid-like black armor creeps up their neck and chest, forming a jagged black mask over their lower face while floating dark shards appear in the smoky air. The armor rapidly engulfs their entire face and head into a menacing spiked black helmet with glowing purple cracks. Finally, the fully armored shadow warrior reaches a dark clawed hand toward the camera as purple lightning strikes behind them. Cinematic dark lighting with neon purple rim light, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

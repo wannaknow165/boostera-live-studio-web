@@ -1,0 +1,44 @@
+{
+  "id": "phoenix-warrior",
+  "posture": "stand",
+  "category": "full",
+  "title": "לוחמת הפניקס",
+  "summary": "עיניה של היוצרת זוהרות באש, שריון מוזהב וכנפי להבה מופיעים, והיא ממריאה לשמיים מעוננים לפני שהיא נוחתת כלוחמת משוריינת עם פניקס ענק מאחוריה.",
+  "duration": 10,
+  "source": "capcaro-146",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#FF8800",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Eyes glow with fiery orange lightning cracks"
+    },
+    {
+      "t": 1,
+      "what": "Flames swirl around her face as camera pulls back to reveal black and gold armor"
+    },
+    {
+      "t": 3,
+      "what": "Spiked gold pauldrons and huge fiery wings sprout from her back"
+    },
+    {
+      "t": 4,
+      "what": "She flies high into dark storm clouds with burning wings spread"
+    },
+    {
+      "t": 6,
+      "what": "Explosion of fire reveals an armored phoenix queen with a giant flaming phoenix rising behind her"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and suddenly their eyes ignite with glowing orange fire and lightning cracks across their cheeks. Keep the person recognizable until the final helmet covers the face. Swirling flames encircle their head as the camera pulls back, transforming their clothes into ornate black and gold warrior armor with spiked shoulder pauldrons. Huge, blazing golden wings erupt from their back, and they launch upward into dark storm clouds, flying away before an explosion of fire reveals them standing in burning ruins wearing a full spiked golden crown-helmet, with a massive flaming phoenix rising behind them. Cinematic fiery lighting, dramatic contrast, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

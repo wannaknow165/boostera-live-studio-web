@@ -1,0 +1,52 @@
+{
+  "id": "lightning-dragon",
+  "posture": "sit",
+  "category": "full",
+  "title": "אדון הדרקונים",
+  "summary": "עיניה של היוצרת זוהרות בכתום, קשקשים וקרניים של דרקון צומחים על פניה וגופה עם ברקים זהובים, עד שהיא הופכת במלואה ליצור דרקון מכונף ושחור-זהוב כשמעליה דרקון ענק יורק אש.",
+  "duration": 10,
+  "source": "capcaro-187",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#FFA500",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Glowing orange dragon eyes on close-up face"
+    },
+    {
+      "t": 1,
+      "what": "Golden lightning cracks and dark dragon scales spread across cheeks and neck"
+    },
+    {
+      "t": 4,
+      "what": "Camera pulls back as curved black horns grow from the head and lightning fills the background"
+    },
+    {
+      "t": 7,
+      "what": "Golden energy engulfs the torso and arms"
+    },
+    {
+      "t": 8,
+      "what": "Full spiked black-and-gold dragon helmet and armor replace the head and upper body"
+    },
+    {
+      "t": 11,
+      "what": "The dragon humanoid reaches forward with clawed hands as a giant serpentine dragon in a ring of fire appears overhead"
+    },
+    {
+      "t": 14,
+      "what": "Large glowing orange-and-black dragon wings unfurl and the sky dragon breathes fire"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and their eyes suddenly glow bright fiery orange with slit pupils. Keep the person recognizable as golden lightning cracks and dark metallic dragon scales spread across their cheeks and neck. As the camera pulls back, curved black dragon horns sprout from their head and golden lightning crackles through the room. Golden energy engulfs their torso before a full spiked black-and-gold dragon helmet and scaled armor overtake their head and body, reaching toward the camera with glowing claws. The room dissolves into a dark stormy sky with clouds and ancient towers, where a giant serpentine dragon coiled in a blazing golden ring of fire looms overhead and breathes flames as massive black-and-orange dragon wings unfurl from the creature's back. Dramatic fiery golden lighting, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

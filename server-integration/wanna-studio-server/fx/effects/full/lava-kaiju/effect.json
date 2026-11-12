@@ -1,0 +1,40 @@
+{
+  "id": "lava-kaiju",
+  "posture": "sit",
+  "category": "full",
+  "title": "גודזילה ועין האש",
+  "summary": "היוצרת פוקחת עיניים זוהרות באש, נעלמת בעוד מפלצת גודזילה יורקת לבה מבעד למסך מקרן בחדר, ואז מופיעה מחדש בשריון סדוק וזוהר עם עין בוערת ענקית מאחוריה.",
+  "duration": 10,
+  "source": "capcaro-166",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#FF7700",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Close-up of streamer opening glowing orange eyes with fiery lightning on cheeks."
+    },
+    {
+      "t": 2,
+      "what": "Streamer vanishes; room ceiling fills with storm clouds and orange lightning while a Godzilla-like monster appears on the wall projector screen."
+    },
+    {
+      "t": 4,
+      "what": "The monster blasts a torrent of molten rock and lava out of the screen toward the camera."
+    },
+    {
+      "t": 7,
+      "what": "Lava pulls back into the reappearing streamer's mouth; she sits in dark cracked lava armor with a giant fiery Eye of Sauron ring behind her."
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and opens their eyes to reveal glowing fiery orange irises with orange lightning bolts crackling on their cheeks. Keep the person recognizable. Suddenly the person vanishes, revealing the room behind them with a large projector screen on the wall and dark storm clouds with orange lightning across the ceiling. A giant Godzilla-like monster on the screen roars as orange lightning cracks the walls, blasting a massive stream of molten rock and lava 3D out of the screen directly into the camera. The lava then sucks back into the mouth of the person, who reappears sitting in the chair wearing dark obsidian armor glowing with orange magma cracks and a fiery eye emblem on the chest, with a giant flaming ring and vertical slit eye hovering behind them. Dramatic fiery orange lighting, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

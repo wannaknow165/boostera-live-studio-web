@@ -1,0 +1,62 @@
+{
+  "id": "anubis",
+  "posture": "sit",
+  "category": "face",
+  "title": "אנוביס",
+  "summary": "עיניים זהובות ואיפור שחור, קסדת תן נוחתת עליה, היא נעלמת לתוך לוחם אנוביס, שער זוהר ומדבר עם צבא, וחוזרת",
+  "duration": 15.6,
+  "requires": [
+    "frontal",
+    "face",
+    "eyes",
+    "shoulders",
+    "body"
+  ],
+  "assets": [
+    {
+      "id": "fxlayer",
+      "type": "layer",
+      "file": "green/layer.webm",
+      "track": "green/track.json",
+      "trackFrom": "reference",
+      "afterTrack": "hold"
+    },
+    {
+      "id": "room",
+      "type": "image",
+      "file": "room.jpg",
+      "key": false
+    }
+  ],
+  "timeline": [
+    {
+      "t": 0,
+      "d": 15.6,
+      "do": "background",
+      "image": "room",
+      "fade": 0.8
+    },
+    {
+      "t": 0,
+      "d": 15,
+      "do": "layer",
+      "asset": "fxlayer",
+      "scale": 1
+    },
+    {
+      "t": 3.6,
+      "d": 1,
+      "do": "vanish"
+    },
+    {
+      "t": 14.6,
+      "d": 1,
+      "do": "return"
+    }
+  ],
+  "returnColor": "#ffb300",
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and transforms with cinematic Egyptian magic in one continuous shot. Their eyes start glowing bright golden-yellow and black jagged Anubis makeup spreads around the eyes and lips. A black-and-gold Anubis jackal helmet with tall ears materializes over their head, and black-and-gold Egyptian armor with a cape forms over their clothes as golden sand swirls around them and their room turns into a golden Egyptian temple with hieroglyphs. They rise as a powerful Anubis warrior, then a bright golden flash fills the screen. Keep the same person recognizable until the helmet covers the face. Photorealistic, dramatic golden lighting, vertical framing, camera static at first then slowly pulling back."
+  }
+}

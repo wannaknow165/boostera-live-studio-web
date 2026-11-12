@@ -1,0 +1,40 @@
+{
+  "id": "fire-phoenix",
+  "posture": "sit",
+  "category": "full",
+  "title": "עוף החול הבוער",
+  "summary": "פיצוץ אש אדיר מעביר את הסטרימר לשממת לבה, שם גופו מתפוצץ לניצוצות והופך ללוחם מגמה עם עוף חול בוער מאחוריו.",
+  "duration": 10,
+  "source": "capcaro-157",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#FF6A00",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Streamer flinches as a massive fireball explodes behind them, filling the frame with smoke."
+    },
+    {
+      "t": 2,
+      "what": "Smoke clears to reveal streamer standing in a volcanic wasteland with floating rocks."
+    },
+    {
+      "t": 3,
+      "what": "Streamer's chest erupts in blinding orange fire and flying sparks."
+    },
+    {
+      "t": 5,
+      "what": "Flames form charred volcanic armor with glowing magma cracks and a flowing kilt as a giant fiery phoenix rises behind them."
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and suddenly flinches forward as a massive orange fireball explodes behind their chair, filling the screen with thick dark smoke. Keep the person recognizable. As the smoke clears, the room transforms into a dark volcanic wasteland with cracked lava ground, floating molten rocks, and purple lightning in stormy clouds. The person stands up as their torso erupts into a blinding burst of orange flames and radiating sparks. Out of the fire, their clothing transforms into jagged, charred black volcanic armor glowing with molten magma cracks and a flowing tattered waistcloth, while glowing fissures appear on their skin. Simultaneously, a colossal, radiant phoenix made of bright orange and gold fire rises directly behind their back, spreading massive flaming wings and screeching upward as the person stands with arms open. Dramatic fiery backlighting, intense glowing embers, cinematic dark fantasy aesthetic, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

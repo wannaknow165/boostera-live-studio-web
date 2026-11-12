@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WANNA · אוטומציות קרב</title>
+<style>
+  :root { --bg:#0b0b12; --panel:#14141f; --panel2:#1b1b29; --line:#262638; --text:#f1f1f6; --muted:#9696ad; --acc:#ff4d6d; --ok:#3ddc84; --warn:#ffcc4d }
+  * { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,"Segoe UI",Arial,sans-serif }
+  header { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; flex-wrap:wrap }
+  h1 { margin:0; font-size:20px } h1 b { color:var(--acc) }
+  main { padding:16px 20px 60px; max-width:1400px; margin:0 auto; display:grid; gap:14px }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px }
+  .card h2 { margin:0 0 10px; font-size:15px } .sub { color:var(--muted); font-size:12px }
+  .btn { background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:9px; padding:7px 11px; font:inherit; cursor:pointer; white-space:nowrap; text-decoration:none }
+  .btn:hover { border-color:#3a3a55 } .btn.primary { background:linear-gradient(135deg,#a3123a,var(--acc)); border:0; font-weight:700 } .btn.sm { padding:4px 8px; font-size:12px }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+  select, input { background:#0f0f18; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 8px; font:inherit }
+  .events { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px }
+  .ev { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:10px; cursor:pointer; text-align:center; font-weight:700; color:var(--text); font:inherit }
+  .ev:hover { border-color:var(--acc) } .ev small { display:block; color:var(--muted); font-weight:400; font-size:11px; margin-top:3px }
+  table { width:100%; border-collapse:collapse } th { text-align:start; color:var(--muted); font-size:12px; font-weight:600; padding:6px; border-bottom:1px solid var(--line) }
+  td { padding:6px; border-bottom:1px solid var(--line); vertical-align:middle } tr.off td { opacity:.45 }
+  .stage { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px }
+  .slot { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:10px; min-height:70px }
+  .slot b { display:block; margin-bottom:4px } .slot.on { border-color:var(--ok) }
+  .log { font:12px ui-monospace,Consolas,monospace; color:var(--muted); max-height:240px; overflow:auto; display:grid; gap:3px }
+  .log .ok { color:var(--ok) } .log .err { color:var(--warn) }
+  .toggle { width:38px; height:22px; border-radius:99px; background:#333; position:relative; cursor:pointer; border:0 }
+  .toggle::after { content:''; position:absolute; top:3px; inset-inline-start:3px; width:16px; height:16px; border-radius:50%; background:#fff; transition:.15s }
+  .toggle.on { background:var(--ok) } .toggle.on::after { inset-inline-start:19px }
+  .mono { font-family:ui-monospace,Consolas,monospace; font-size:12px; direction:ltr; background:#0f0f18; border:1px solid var(--line); border-radius:8px; padding:6px 8px; text-align:left; overflow-wrap:anywhere }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚔ <b>אוטומציות קרב</b></h1>
+  <span class="sub">כל אירוע בקרב מפעיל אפקט לבד: על היריב או על המשדרת</span>
+  <span style="margin-inline-start:auto" class="row"><a class="btn" href="/">🎬 גלריה</a><a class="btn" href="/fx/" target="_blank">🧙 פאנל אפקטים חיים</a></span>
+</header>
+<main>
+  <section class="card">
+    <h2>🎮 בדיקת קרב: לחיצה = האירוע קרה עכשיו</h2>
+    <div class="row" style="margin-bottom:10px">
+      <label class="sub">היריב <select id="opp"></select></label>
+      <label class="sub">מתנה <input id="giftName" value="Lion" size="10" dir="ltr"></label>
+      <label class="sub">תומך <input id="supName" value="תומך 1" size="10"></label>
+      <label class="sub">משדרת <input id="streamer" placeholder="שם המשדרת" size="12"></label>
+    </div>
+    <div class="events" id="events"></div>
+  </section>
+
+  <section class="card">
+    <h2>📺 מה על המסך עכשיו</h2>
+    <div class="stage" id="stage"></div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="margin-bottom:8px"><h2 style="margin:0">📋 הכללים</h2>
+      <span class="row" style="margin-inline-start:auto"><button class="btn" id="add">＋ כלל</button><button class="btn" id="reset">↺ ברירת מחדל</button><button class="btn primary" id="save">💾 שמור</button></span></div>
+    <table><thead><tr><th>פעיל</th><th>כשקורה</th><th>מה מנגנים</th><th>השהיה</th><th>הערה</th><th></th></tr></thead><tbody id="rules"></tbody></table>
+  </section>
+
+  <section class="card">
+    <h2>🔌 איך אירועים מגיעים לכאן</h2>
+    <div class="sub">קורא המתנות או ה-Studio שולחים כל אירוע מהטיקטוק:</div>
+    <div class="mono" id="howto"></div>
+    <div class="sub" style="margin-top:6px">סוגים: <span id="types" class="mono" style="display:inline;padding:1px 6px"></span></div>
+  </section>
+
+  <section class="card"><h2>🕘 יומן</h2><div class="log" id="log"></div></section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+let data = null;
+const ACTIONS = { tomato: '🍅 עגבנייה על הראש שנבחר', wake_up: '😴→🥊 WAKE UP (הגמד + בום)', screen_hits: '🥊 דפיקות על המסך', double: '🥊 דאבל: דופק כל הזמן', player_random: '🎯 קליפ אישי של היריב (אקראי)', special: '⚔ קליפ קרב על השחקן', overlay: '🥊 אוברליי / דמות', live: '🟠 אפקט חי על המשדרת', clip: '🔵 סרטון רקע', supporter_video: '💛 הסרטון של התומך' };
+$('#howto').textContent = `POST ${location.origin}/api/event   {"type":"gift_x5","user":"ronbiton11"}   {"type":"gift","gift":"Lion"}   {"type":"supporter_gift","supporter":"דני"}`;
+
+async function load() {
+  data = await (await fetch('/api/automations')).json();
+  $('#types').textContent = Object.keys(data.events).join(' · ');
+  $('#opp').innerHTML = data.options.players.map(p => `<option value="${p}">@${p}</option>`).join('');
+  $('#events').innerHTML = Object.entries(data.events).map(([k, e]) => `<button class="ev" data-ev="${k}">${e.he}<small>${data.rules.filter(r => r.on === k && r.enabled).length} כללים פעילים</small></button>`).join('');
+  document.querySelectorAll('.ev').forEach(b => b.onclick = () => fire(b.dataset.ev));
+  renderRules(); renderLog();
+}
+function targetSelect(r) {
+  const t = r.action.type, opts = data.options[t];
+  if (t === 'tomato') return `<label class="sub"><input data-k="count" type="number" min="1" max="10" value="${r.action.count || 1}" style="width:60px"> עגבניות${r.action.perGift ? ' לכל מתנה' : ''}</label>`;
+  if (t === 'screen_hits') return `<label class="sub"><input data-k="count" type="number" min="1" max="10" value="${r.action.count || 1}" style="width:60px"> מכות</label>`;
+  if (t === 'double') return `<select data-k="mult">${[2, 3, 5].map(m => `<option value="${m}" ${m === (r.action.mult || 2) ? 'selected' : ''}>×${m}</option>`).join('')}</select><label class="sub"><input data-k="seconds" type="number" min="5" max="300" value="${r.action.seconds || 30}" style="width:60px"> שניות</label>`;
+  if (!opts) return t === 'player_random' ? '<span class="sub">לפי היריב באירוע</span>' : t === 'supporter_video' ? '<span class="sub">לפי התומך באירוע</span>' : '';
+  return `<select data-k="target">${opts.map(o => `<option value="${o.id}" ${o.id === r.action.id ? 'selected' : ''}>${o.name}</option>`).join('')}</select>`;
+}
+function renderRules() {
+  $('#rules').innerHTML = data.rules.map((r, i) => `<tr class="${r.enabled ? '' : 'off'}" data-i="${i}">
+    <td><button class="toggle ${r.enabled ? 'on' : ''}" data-k="enabled" title="פעיל"></button></td>
+    <td><select data-k="on">${Object.entries(data.events).map(([k, e]) => `<option value="${k}" ${k === r.on ? 'selected' : ''}>${e.he}</option>`).join('')}</select>
+      ${r.on === 'gift' ? `<input data-k="match" value="${r.match || ''}" placeholder="שם המתנה" size="9" dir="ltr">` : ''}</td>
+    <td><div class="row"><select data-k="type">${Object.entries(ACTIONS).map(([k, l]) => `<option value="${k}" ${k === r.action.type ? 'selected' : ''}>${l}</option>`).join('')}</select>${targetSelect(r)}</div></td>
+    <td><input data-k="delay" type="number" min="0" step="100" value="${r.delayMs || 0}" style="width:80px"> <span class="sub">ms</span></td>
+    <td><input data-k="note" value="${(r.note || '').replace(/"/g, '&quot;')}" style="width:100%;min-width:180px"></td>
+    <td class="row" style="flex-wrap:nowrap"><button class="btn sm" data-k="test">▶ נסה</button><button class="btn sm" data-k="del">🗑</button></td></tr>`).join('');
+  document.querySelectorAll('#rules tr').forEach(tr => {
+    const r = data.rules[tr.dataset.i];
+    tr.querySelectorAll('[data-k]').forEach(el => {
+      const k = el.dataset.k;
+      if (k === 'enabled') el.onclick = () => { r.enabled = !r.enabled; renderRules(); };
+      else if (k === 'test') el.onclick = () => fire(r.on, r);
+      else if (k === 'del') el.onclick = () => { data.rules.splice(tr.dataset.i, 1); renderRules(); };
+      else el.onchange = () => {
+        if (k === 'on') r.on = el.value; if (k === 'match') r.match = el.value; if (k === 'delay') r.delayMs = +el.value; if (k === 'note') r.note = el.value;
+        if (k === 'type') { r.action = { type: el.value }; const o = data.options[el.value]; if (o?.length) r.action.id = o[0].id; }
+        if (k === 'target') r.action.id = el.value;
+        if (k === 'count') r.action.count = +el.value; if (k === 'mult') r.action.mult = +el.value; if (k === 'seconds') r.action.seconds = +el.value;
+        if (k === 'type' && el.value === 'screen_hits') r.action.count = 2; if (k === 'type' && el.value === 'double') { r.action.mult = 2; r.action.seconds = 30; }
+        if (k === 'on' || k === 'type') renderRules();
+      };
+    });
+  });
+}
+async function fire(type, rule) {
+  const ev = { type, user: $('#opp').value, gift: rule?.match || $('#giftName').value, supporter: $('#supName').value, streamer: $('#streamer').value || undefined };
+  const r = await (await fetch('/api/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ev) })).json();
+  data.history = (await (await fetch('/api/automations')).json()).history; renderLog();
+}
+function renderLog() {
+  $('#log').innerHTML = (data.history || []).map(h => { const t = new Date(h.at).toLocaleTimeString('he-IL'); const ev = data.events[h.event.type]?.he || h.event.type;
+    return h.result.error ? `<div class="err">${t} · ${ev}${h.event.user ? ' · @' + h.event.user : ''} → ${h.result.error}</div>`
+      : `<div class="ok">${t} · ${ev}${h.event.user ? ' · @' + h.event.user : ''} → ${h.result.name || h.result.id}${h.result.user ? ' על @' + h.result.user : ''}</div>`; }).join('') || '<div>עוד לא קרה כלום</div>';
+}
+$('#add').onclick = () => { data.rules.push({ id: 'r' + Date.now(), on: 'gift', match: 'Rose', action: { type: 'overlay', id: data.options.overlay[0]?.id }, delayMs: 0, enabled: true, note: '' }); renderRules(); };
+$('#save').onclick = async () => { await fetch('/api/automations', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data.rules) }); $('#save').textContent = '✓ נשמר'; setTimeout(() => $('#save').textContent = '💾 שמור', 1500); load(); };
+$('#reset').onclick = async () => { if (!confirm('להחזיר את כל הכללים לברירת המחדל?')) return; await fetch('/api/automations/reset', { method: 'POST' }); load(); };
+
+// live view of what's on stage (same stream the Studio / live panel listen to)
+const es = new EventSource('/api/stage-events');
+es.onmessage = m => { const s = JSON.parse(m.data); const slot = (title, v, body) => `<div class="slot ${v ? 'on' : ''}"><b>${title}</b>${v ? body : '<span class="sub">ריק</span>'}</div>`;
+  $('#stage').innerHTML = slot('🥊 אוברליי', s.overlay, s.overlay && `<span>${s.overlay.id}</span>${s.overlay.auto ? `<div class="sub">אוטומטי: ${s.overlay.auto}</div>` : ''}${s.overlay.id ? `<video src="/media/overlays/${s.overlay.id}.webm" autoplay muted playsinline style="width:100%;max-height:160px;margin-top:6px;background:#0f0f18;border-radius:8px"></video>` : ''}`)
+    + slot('⚔ קרב על שחקן', s.special, s.special && `<span>${s.special.set}${s.special.user ? ' על @' + s.special.user : ''}</span>${s.special.url ? `<video src="${s.special.url}" autoplay muted playsinline style="width:100%;max-height:160px;margin-top:6px;background:#0f0f18;border-radius:8px"></video>` : ''}`)
+    + slot('🟠 אפקט חי', s.live, s.live && `<span>${s.live.effect}</span><div class="sub">${s.live.streamer ? 'משדרת: ' + s.live.streamer : 'המשדרת בפאנל'}</div>`)
+    + slot('🔵 רקע', s.clip, s.clip && `<span>${s.clip.id}</span>`)
+    + slot('🥊 מסך', s.screen && Date.now() - s.screen.at < (s.screen.type === 'double' ? s.screen.seconds * 1000 : 4000), s.screen && (s.screen.type === 'double' ? `<span>דאבל ×${s.screen.mult} · ${s.screen.seconds} ש׳</span>` : `<span>${s.screen.count} דפיקות</span>`)); };
+load();
+</script>
+</body>
+</html>

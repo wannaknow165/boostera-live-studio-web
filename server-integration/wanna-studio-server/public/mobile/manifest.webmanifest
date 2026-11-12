@@ -1,0 +1,28 @@
+{
+  "id": "/mobile/",
+  "name": "WANNA Live FX",
+  "short_name": "WANNA FX",
+  "description": "המצלמה והאפקטים שלך, מחוברים לפאנל WANNA הקיים.",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/mobile/",
+  "scope": "/mobile/",
+  "display": "standalone",
+  "background_color": "#111019",
+  "theme_color": "#111019",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/mobile/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/mobile/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WANNA Live FX</title>
+<style>
+  :root { --bg: #0d0d14; --panel: #171723; --text: #f2f2f7; --muted: #9a9ab0; --accent: #a259ff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px system-ui, sans-serif; display: flex; gap: 16px; padding: 16px; flex-wrap: wrap; }
+  #stage { position: relative; background: #000; border-radius: 12px; overflow: hidden; height: calc(100vh - 32px); aspect-ratio: 9/16; max-width: 100%; }
+  #out { width: 100%; height: 100%; object-fit: contain; display: block; }
+  #src { display: none; }
+  aside { flex: 1; min-width: 260px; max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--panel); border-radius: 12px; padding: 14px; }
+  h1 { font-size: 18px; margin: 0 0 4px; } h2 { font-size: 14px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+  button { background: #262638; color: var(--text); border: 1px solid #33334a; border-radius: 10px; padding: 10px 12px; font: inherit; cursor: pointer; }
+  button.fx { background: linear-gradient(135deg, #4b1d8f, var(--accent)); border: 0; font-weight: 700; width: 100%; text-align: right; }
+  button:disabled { opacity: .5; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .fxgrid { display: grid; gap: 8px; }
+  #log { font: 12px ui-monospace, monospace; color: var(--muted); max-height: 200px; overflow: auto; white-space: pre-wrap; }
+  small { color: var(--muted); }
+  /* head picker: operator-only boxes over the picture (NOT drawn into the broadcast canvas) */
+  #heads { position:absolute; inset:0; pointer-events:none }
+  #heads.picking { pointer-events:auto; cursor:crosshair }
+  .head { position:absolute; border:3px dashed #ffffffaa; border-radius:14px; box-shadow:0 0 0 2px #0006 }
+  .head.target { border:4px solid #ff3b30; box-shadow:0 0 18px #ff3b30 }
+  .head.target::after { content:'🎯'; position:absolute; top:-30px; left:50%; transform:translateX(-50%); font-size:22px }
+  /* the heads found on the phone's battle screen: the operator picks the target */
+  #oppHeads button { padding:6px 10px } #oppHeads button.on { border-color:#ff3b30; box-shadow:0 0 0 2px #ff3b30 }
+  #oppHeads button.oh { padding:2px; border-radius:50%; line-height:0; position:relative } #oppHeads button.oh canvas { width:54px; height:54px; border-radius:50% }
+  #oppHeads button.oh.on::after { content:'🎯'; position:absolute; top:-10px; right:-6px; font-size:16px; line-height:1 }
+  #oppHeads .sep { width:2px; align-self:stretch; background:#33334a }
+  /* ?clean=1 — CLEAN PROGRAM: only the picture (camera + effects), no panel, for the Studio / virtual camera */
+  body.clean { padding:0; background:#000 } body.clean aside { display:none }
+  body.clean #stage { height:100vh; width:100vw; border-radius:0 } body.clean #toast { display:none !important }
+</style>
+</head>
+<body>
+  <div id="stage"><canvas id="out"></canvas><div id="heads"></div><video id="src" playsinline muted loop></video>
+    <div id="toast" style="position:absolute;left:12px;right:12px;bottom:16px;background:#c0263acc;color:#fff;padding:12px 14px;border-radius:12px;font-weight:700;display:none;text-align:center"></div></div>
+  <aside>
+    <div class="card"><h1>WANNA Live FX</h1><small>מנוע טרנספורמציה בזמן אמת על המשדרת: פנים, עיניים, גוף, היעלמות וחזרה</small></div>
+    <div class="card"><h2>מקור</h2><div class="row">
+      <button id="cam">מצלמה</button>
+      <button id="phone" title="מסך הטלפון דרך ADB, בלי הסרגלים של טיקטוק">טלפון (ADB)</button>
+    </div>
+    <div class="row" style="margin-top:8px"><button id="plate" title="המשדרת יוצאת מהפריים לשנייה, לוחצים, וההיעלמות תראה חדר נקי">צלם רקע ריק</button>
+      <label><button onclick="this.nextElementSibling.click()">רקע ריק מקובץ…</button><input id="platefile" type="file" accept="video/*,image/*" hidden></label></div></div>
+    <div class="card"><h2>🎯 המטרה: מי שמולי בקרב</h2>
+      <div id="oppHeads" class="row" style="align-items:center"><small>מחפש ראשים במסך הקרב בטלפון…</small></div>
+      <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin-top:8px"><input type="checkbox" id="oppOn" checked> להשתמש בראש החי של המתחרה</label>
+      <small id="oppInfo">מחפש את היריב במסך הקרב בטלפון…</small>
+      <h2 style="margin-top:12px">קליפי קרב על הראש שלו (בדיקה)</h2>
+      <div id="battleBtns" class="row"></div>
+      <div class="row" style="margin-top:8px"><button id="tomato1">🍅 עגבנייה</button><button id="tomato3">🍅 ×3</button>
+        <select id="tomatoStyle" style="flex:1;background:#0f0f18;color:var(--text);border:1px solid #33334a;border-radius:10px;padding:8px"><option value="live">זורקים על הראש החי שלו</option><option value="head">עגבנייה בצורת הראש שלו</option></select></div>
+      <div class="row" style="margin-top:8px"><button id="pickHead">בחר ראש בתמונה שלנו</button><button id="clearHead">על המסך</button><span id="headInfo" class="sub"></span></div>
+      <small>המטרה של כל אפקטי הקרב היא <b>מי שמולך</b> (הראש הגדול בצד ימין של מסך הקרב בטלפון), או <b>ראש שתבחר</b> מהראשים שלמעלה (בקרב של ארבעה). הראש שלו מובא <b>חי</b> אל המסך שלנו: בסנייפ הוא יושב על הרקדן עם החצאית, ועגבניות / חיתול / כפפות נזרקים עליו. בלי קרב על מסך הטלפון (או כשהמתג כבוי) הקליפים מתנגנים כמו שהם.</small></div>
+    <div class="card"><h2>💛 אפקט לתומך (התומך עצמו בפנים)</h2>
+      <div class="row"><input id="fanName" placeholder="שם התומך" style="flex:1;background:#0f0f18;color:var(--text);border:1px solid #33334a;border-radius:10px;padding:10px">
+        <label><button onclick="this.nextElementSibling.click()">תמונת פרופיל…</button><input id="fanPic" type="file" accept="image/*" hidden></label></div>
+      <div class="row" style="margin-top:8px"><button data-fan="2">×2</button><button data-fan="3">×3</button><button data-fan="5">×5</button><button data-fan="50">×50</button><button id="fanMvp">👑 MVP</button></div>
+      <small id="fanInfo">התומך שנתן נמצא <b>בתוך</b> האפקט: תמונת הפרופיל שלו נגזרת לראש ומשתלבת בפיצוץ, עם הכפל (כל מספר) או MVP ועם השם שלו. בלי תמונה: עיגול זהב עם האות הראשונה. בשידור זה מגיע מהאירוע עצמו (<span dir="ltr">supporter · avatar · mult</span>).</small></div>
+    <div class="card"><h2>🥊 דפיקות על המסך (להעיר את הקהל)</h2>
+      <div class="row" style="margin-bottom:8px"><button id="wake" style="background:linear-gradient(135deg,#7a1fa2,#ff3b30);border:0;font-weight:800;width:100%">😴 → 🥊 WAKE UP! (הגמד צועק ומעיר את כולם, בסוף בום ורעידה)</button></div>
+      <div class="row"><button data-hits="1">מכה</button><button data-hits="2">×2 שתי מכות</button><button data-hits="3">×3 שלוש מכות</button><button data-hits="5">×5</button></div>
+      <div class="row" style="margin-top:8px"><button data-double="2">דאבל ×2 · 30ש</button><button data-double="3">דאבל ×3</button><button data-double="5">דאבל ×5</button><button id="stopDouble">עצור דאבל</button></div>
+      <small>בדאבל הוא ממשיך לדפוק כל הזמן שהדאבל רץ, עם ספירה למעלה.</small></div>
+    <div class="card"><h2>👤 משדרת</h2><div class="row"><input id="streamer" placeholder="שם המשדרת" style="flex:1;background:#0f0f18;color:var(--text);border:1px solid #33334a;border-radius:10px;padding:10px"><button id="prepAll">הכן הכל</button></div>
+      <small>רמיקס = ה-AI מייצר אותה עצמה משתנה, מהפריים שלה. מכינים פעם אחת לכל משדרת (בערך 4 דקות ו-1$ לאפקט), ונשמר לתמיד.</small></div>
+    <div class="card"><h2>🪑 אפקטים בישיבה</h2><div id="effects-sit" class="fxgrid"></div></div>
+    <div class="card"><h2>🧍 אפקטים בעמידה</h2><div id="effects-stand" class="fxgrid"><small>אין עדיין. תוסיף סרטון שמסתיים ב-<b>-stand</b></small></div></div>
+    <div class="card"><h2>הקלטה ובדיקה</h2><div class="row"><button id="rec">הקלט הפעלה אחת</button><button id="showpts">הצג נקודות</button></div></div>
+    <div class="card"><h2>יומן</h2><div id="log"></div></div>
+  </aside>
+<script type="module">
+import { FxEngine } from './fx-engine.js';
+const $ = s => document.querySelector(s);
+const logEl = $('#log'); const log = m => { logEl.textContent = `${new Date().toLocaleTimeString('he-IL')} ${m}\n` + logEl.textContent; console.log(m); };
+const video = $('#src'), out = $('#out');
+const fx = new FxEngine(video, out, { log }); window.fx = fx;
+let toastT; fx.onReject = c => { const t = $('#toast'); t.textContent = c.message; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => t.style.display = 'none', 3500); };
+// live readiness on each effect button
+setInterval(() => { document.querySelectorAll('button.fx').forEach(b => { if (!fx.effects[b.dataset.id]) return; const c = fx.ready && fx.check(b.dataset.id); if (!c) return; b.style.opacity = c.ok ? 1 : .55; b.title = c.message; const sm = b.querySelector('small'); if (sm) sm.textContent = c.ok ? ' ✓ מוכן' : ' ✗ חסר: ' + c.missing.map(m => FxEngine.NAMES[m] || m).join(', '); }); }, 500);
+const qs = new URLSearchParams(location.search);
+if (qs.get('clean')) document.body.classList.add('clean');
+if (qs.get('streamer')) try { localStorage.setItem('fx-streamer', qs.get('streamer')); } catch {}
+
+async function useSrc(src) { video.srcObject = null; video.src = src; await video.play(); log('מקור: ' + src); }
+$('#cam').onclick = async () => { video.src = ''; video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: 'user' } }); await video.play(); log('מצלמה פעילה'); };
+// Phone over ADB: MJPEG <img> -> canvas (cropping the app's top/bottom bars) -> captureStream -> the engine's <video>
+async function usePhone() {
+  const img = new Image(); img.src = '/phone.mjpeg?' + Date.now();
+  await new Promise((r, j) => { img.onload = r; img.onerror = j; setTimeout(r, 6000); });
+  const top = Number(qs.get('cropTop') ?? 0.09), bottom = Number(qs.get('cropBottom') ?? 0.15);
+  const c = document.createElement('canvas'); c.width = 720; c.height = Math.round(1600 * (1 - top - bottom)); const cx = c.getContext('2d');
+  const draw = () => { if (img.naturalWidth) cx.drawImage(img, 0, img.naturalHeight * top, img.naturalWidth, img.naturalHeight * (1 - top - bottom), 0, 0, c.width, c.height); requestAnimationFrame(draw); }; draw();
+  video.src = ''; video.srcObject = c.captureStream(30); await video.play(); log('טלפון מחובר דרך ADB');
+}
+$('#phone').onclick = usePhone;
+$('#plate').onclick = () => fx.capturePlate();
+$('#showpts').onclick = () => { fx.debug = !fx.debug; $('#showpts').textContent = fx.debug ? 'הסתר נקודות' : 'הצג נקודות'; };
+if (qs.get('debug')) fx.debug = true;
+$('#platefile').onchange = e => { const f = e.target.files[0]; fx._plateIsVideo = f.type.startsWith('video'); fx.plateFromUrl(URL.createObjectURL(f)); };
+if (qs.get('plate')) setTimeout(() => fx.plateFromUrl(qs.get('plate')), 3000);
+
+let current = null;
+// Buttons appear at once from index.json; each effect's videos/tracking load in the background (first one first).
+// Pressing a button whose effect is still loading loads it right away and starts it.
+let list = [];
+async function loadAll() {
+  try { list = await (await fetch('effects/index.json', { cache: 'no-store' })).json(); } catch { list = []; }
+  for (const e of list) {
+    const row = document.createElement('div'); row.className = 'row'; row.style.flexWrap = 'nowrap';
+    const b = document.createElement('button'); b.className = 'fx'; b.dataset.id = e.id; b.style.flex = '1'; b.innerHTML = `${e.title || e.id}<small> ⏳ טוען…</small>`;
+    const prep = document.createElement('button'); prep.className = 'prep'; prep.dataset.id = e.id; prep.textContent = 'הכן רמיקס'; prep.style.whiteSpace = 'nowrap';
+    // main button: plays her remix when it's ready; without a remix it falls back to the overlay effect
+    b.onclick = async () => { current = e.id; if (!fx.effects[e.id]) { log('טוען ' + e.title + '…'); await ensure(e); }
+      const r = remix[e.id]; if (r?.status === 'done') fx.triggerRemix(e.id, r.url); else fx.trigger(e.id); };
+    prep.onclick = () => prepare(e);
+    row.append(b, prep);
+    const group = $(e.posture === 'stand' ? '#effects-stand' : '#effects-sit'); group.querySelector(':scope > small:only-child')?.remove(); group.append(row);
+    current ??= e.id;
+  }
+}
+// ---- remix per streamer ----
+const remix = {};
+const streamerName = () => ($('#streamer').value.trim() || 'default');
+try { $('#streamer').value = localStorage.getItem('fx-streamer') || ''; } catch {}
+$('#streamer').onchange = () => { try { localStorage.setItem('fx-streamer', $('#streamer').value); } catch {} refreshRemix(); };
+async function prepare(e) {
+  if (!fx.effects[e.id]) await ensure(e);
+  // wait up to 5 s for a good frame (looking straight, body in view): the remix starts from exactly this frame
+  let c = fx.check(e.id);
+  if (!c.ok) { fx.onReject?.({ ...c, message: 'מכינה רמיקס: ' + c.message }); for (let i = 0; i < 25 && !(c = fx.check(e.id)).ok; i++) await new Promise(r => setTimeout(r, 200)); }
+  if (!c.ok) { fx.onReject?.({ ...c, message: 'לא הוכן רמיקס: ' + c.message }); return; }
+  const blob = await fx.grabFrame();
+  await fetch(`/remix?fx=${encodeURIComponent(e.dir)}&streamer=${encodeURIComponent(streamerName())}`, { method: 'POST', body: blob });
+  log(`מכין רמיקס "${e.title}" ל-${streamerName()}… (כמה דקות)`); refreshRemix();
+}
+$('#prepAll').onclick = async () => { for (const e of list) if (remix[e.id]?.status !== 'done' && remix[e.id]?.status !== 'running') await prepare(e); };
+async function refreshRemix() {
+  for (const e of list) {
+    try { remix[e.id] = await (await fetch(`/remix-status?fx=${encodeURIComponent(e.dir)}&streamer=${encodeURIComponent(streamerName())}`)).json(); } catch { continue; }
+    const r = remix[e.id], prep = document.querySelector(`button.prep[data-id="${e.id}"]`); if (!prep) continue;
+    prep.textContent = r.status === 'done' ? '✓ רמיקס מוכן' : r.status === 'running' ? `⏳ מייצר… ${Math.round((Date.now() - r.started) / 1000)}ש` : r.status === 'failed' ? '⚠ נכשל, שוב' : 'הכן רמיקס';
+    prep.style.background = r.status === 'done' ? '#1f6b3a' : r.status === 'running' ? '#5a4a12' : '';
+    if (r.status === 'done') fx.remixVideo(r.url); // preload so it starts instantly
+  }
+}
+setInterval(refreshRemix, 4000);
+const loading = {};
+const ensure = e => loading[e.id] ||= fx.loadEffect(`effects/${e.dir}`).catch(err => log(`שגיאה בטעינת ${e.id}: ${err.message}`));
+async function loadInBackground() { for (const e of list) await ensure(e); log('כל האפקטים נטענו'); }
+document.addEventListener('keydown', e => { if (e.code === 'Space' && current) { e.preventDefault(); fx.trigger(current); } });
+// external triggers: window.postMessage({type:'fx', id}) or ?ws=ws://host:port (messages {type:'TRIGGER', effect})
+window.addEventListener('message', e => { if (e.data?.type === 'fx') fx.trigger(e.data.id || current); });
+if (qs.get('ws')) { const ws = new WebSocket(qs.get('ws')); ws.onmessage = m => { try { const d = JSON.parse(m.data); if (d.type === 'TRIGGER') fx.trigger(d.effect || current); } catch {} }; }
+
+// record one full run of the current effect to test/out via the local server
+$('#rec').onclick = () => record(current);
+window.recordRun = record;
+async function record(id, name) {
+  const stream = out.captureStream(30); const rec = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9', videoBitsPerSecond: 8e6 }); const chunks = [];
+  rec.ondataavailable = e => chunks.push(e.data);
+  const done = new Promise(r => rec.onstop = r);
+  rec.start(); await new Promise(r => setTimeout(r, 800));
+  const rr = remix[id]; let len = fx.effects[id].duration;
+  if (rr?.status === 'done') { await fx.triggerRemix(id, rr.url, { force: true }); len = fx.active?.remix?.duration || len; } else fx.trigger(id);
+  await new Promise(r => setTimeout(r, (len + 1.2) * 1000)); rec.stop(); await done;
+  const blob = new Blob(chunks, { type: 'video/webm' });
+  const res = await fetch(`/save?name=${encodeURIComponent(name || id + '-run')}.webm`, { method: 'POST', body: blob });
+  log('נשמרה הקלטה: ' + (await res.text())); return res.ok;
+}
+
+await loadAll(); refreshRemix();
+log('טוען MediaPipe…'); await fx.init(); fx.start();
+// live sources only: phone (ADB) or the computer camera
+if (qs.get('src') === 'phone') usePhone();
+else if (qs.get('src')) useSrc(qs.get('src'));
+log('מוכן');
+window.fxReady = true;
+
+document.querySelectorAll('[data-hits]').forEach(b => b.onclick = () => fx.screenHits(+b.dataset.hits));
+document.querySelectorAll('[data-double]').forEach(b => b.onclick = () => fx.startDouble(+b.dataset.double, 30));
+$('#stopDouble').onclick = () => fx.stopDouble();
+$('#wake').onclick = () => fx.wakeUp();
+
+// ---- head picker (operator only) ----
+const headsEl = $('#heads'); let picking = false;
+const picRect = () => { // where the picture actually sits inside the canvas element (object-fit: contain)
+  const r = out.getBoundingClientRect(), s = Math.min(r.width / out.width, r.height / out.height), w = out.width * s, h = out.height * s;
+  return { x: r.left + (r.width - w) / 2, y: r.top + (r.height - h) / 2, w, h, r };
+};
+$('#pickHead').onclick = () => { picking = !picking; if (picking) fx.setMaxHeads(4); // look for several heads only while choosing / keeping a target
+   headsEl.classList.toggle('picking', picking); $('#pickHead').textContent = picking ? 'לחץ על ראש בתמונה…' : 'בחר ראש בתמונה שלנו'; };
+$('#clearHead').onclick = () => { fx.target = null; fx.setMaxHeads(1); };
+headsEl.onclick = e => { if (!picking) return; const p = picRect(); fx.pickHeadAt((e.clientX - p.x) / p.w, (e.clientY - p.y) / p.h); picking = false; headsEl.classList.remove('picking'); $('#pickHead').textContent = 'בחר ראש בתמונה שלנו'; };
+(function drawHeads() {
+  const p = picRect(), sr = $('#stage').getBoundingClientRect(), fresh = fx.heads && performance.now() - (fx.headsSeen || 0) < 500;
+  const list = fresh ? fx.heads : [], T = fx.target;
+  const boxes = list.map(h => ({ h, t: T && Math.hypot(h.cx - T.cx, h.cy - T.cy) < 0.03 })).filter(b => picking || b.t);
+  headsEl.innerHTML = boxes.map(({ h, t }) => `<div class="head ${t ? 'target' : ''}" style="left:${p.x - sr.left + (h.cx - h.w * 0.65) * p.w}px;top:${p.y - sr.top + (h.cy - h.h * 0.75) * p.h}px;width:${h.w * 1.3 * p.w}px;height:${h.h * 1.5 * p.h}px"></div>`).join('');
+  $('#headInfo').textContent = `${list.length} ראשים${T ? ' · יש מטרה' : ''}`;
+  // the heads found on the phone's battle screen (operator view only): click one = the target; "automatic" = the one facing me
+  const o = fx.opp;
+  if (o && o.headsAt !== drawHeads.at) {
+    drawHeads.at = o.headsAt; const box = $('#oppHeads'); box.innerHTML = '';
+    const auto = document.createElement('button'); auto.textContent = 'אוטומטי: מי שמולי'; if (!o.pick) auto.className = 'on'; auto.onclick = () => { o.choose(null); drawHeads.at = 0; }; box.append(auto);
+    let side = null;
+    o.heads.forEach((h, i) => { if (side && h.side !== side && o.heads.every(x => Math.abs(x.fy - h.fy) < 0.08)) { const s = document.createElement('span'); s.className = 'sep'; s.title = 'קו האמצע של הקרב'; box.append(s); } side = h.side;
+      const b = document.createElement('button'); b.className = 'oh' + (h.target ? ' on' : ''); b.title = (h.side === 'L' ? 'צד שמאל (הצד שלנו)' : 'צד ימין (המתחרים)') + ' · לחיצה = המטרה'; b.append(h.thumb); b.onclick = () => { o.choose(i); drawHeads.at = 0; }; box.append(b); });
+    if (!o.heads.length) { const s = document.createElement('small'); s.textContent = 'אין ראשים על מסך הקרב כרגע'; box.append(s); }
+  }
+  if (o) $('#oppInfo').textContent = !$('#oppOn').checked ? 'כבוי: הקליפים מתנגנים בלי הראש שלו' : o.status();
+  requestAnimationFrame(drawHeads);
+})();
+fx.loadTomato();
+// the battle target: watch the phone's battle screen automatically (unless ?opp=0). ?oppsrc=<video file> = a stand-in for the phone (tests)
+if (qs.get('opp') !== '0') fx.watchOpponent(qs.get('oppsrc') || undefined);
+// the switch (kept on the server so the clean foreground layer follows it too) + the pick + a face another panel already found
+fetch('/api/opponent-face').then(r => r.json()).then(j => { if (j.tomatoStyle) setTomatoStyle(j.tomatoStyle); else if (fx.tomatoStyle === 'head') tellTomatoStyle(); $('#oppOn').checked = fx.useOppFace = j.enabled !== false; if (fx.opp) { fx.opp.enabled = fx.useOppFace; fx.opp.applyPick(j.pick || null); } if (j.opponent?.url && !fx.oppFace) fx.setOpponentFace(j.opponent.url, j.opponent.at); }).catch(() => {});
+$('#oppOn').onchange = () => { fx.useOppFace = $('#oppOn').checked; if (fx.opp) fx.opp.enabled = fx.useOppFace; fetch('/api/opponent-face?enabled=' + (fx.useOppFace ? 1 : 0), { method: 'POST' }).catch(() => {}); };
+// test buttons: every battle clip that knows where the target's head goes; tomatoes
+// supporter effects: whoever gave is IN the effect (here the name and picture come from the two fields; live they come with the event)
+let fanPic = null;
+$('#fanPic').onchange = e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { fanPic = rd.result; fx.battle.avatars?.get(fanPic); log('💛 תמונת פרופיל לבדיקה: ' + f.name); }; rd.readAsDataURL(f); };
+const fanWho = () => ({ name: $('#fanName').value.trim() || 'תומך', avatar: fanPic || new URLSearchParams(location.search).get('fanpic') });
+document.querySelectorAll('[data-fan]').forEach(b => b.onclick = () => fx.playBattle('fan_burst', { tag: 'test', who: fanWho(), vars: { mult: b.dataset.fan } }));
+$('#fanMvp').onclick = () => fx.playBattle('fan_mvp', { tag: 'test', who: fanWho() });
+setTimeout(() => fx.battle.avatars?.warm(), 6000); // the head cutter for profile pictures, ready before the first supporter effect
+fx.battle.load().then(b => { const box = $('#battleBtns'); for (const c of Object.values(b.clips)) if (c.head && c.head.layer !== 'fan') { const bt = document.createElement('button'); bt.textContent = c.name; bt.title = c.head.layer === 'over' ? 'הראש שלו יושב על הדמות שבקליפ' : 'נזרק על הראש שלו'; bt.onclick = () => fx.playBattle(c.id); box.append(bt); } });
+function setTomatoStyle(v) { $('#tomatoStyle').value = fx.tomatoStyle = v === 'head' ? 'head' : 'live'; try { localStorage.setItem('fx-tomato-style', fx.tomatoStyle); } catch {} }
+function tellTomatoStyle() { fetch('/api/opponent-face?tomatoStyle=' + fx.tomatoStyle, { method: 'POST' }).catch(() => {}); }
+{ let saved = 'live'; try { saved = localStorage.getItem('fx-tomato-style') || 'live'; } catch {} setTomatoStyle(saved); }
+$('#tomatoStyle').onchange = () => { setTomatoStyle($('#tomatoStyle').value); tellTomatoStyle(); };
+$('#tomato1').onclick = () => fx.throwTomato(1); $('#tomato3').onclick = () => fx.throwTomato(3);
+fx.glove(); fx.loadGnome(); // preload the gnome clips (+ glove fallback)
+
+// battle automations: the server says "live effect X now" -> play it on this streamer (her remix if ready, else the layer)
+try {
+  let lastLive = Date.now(), lastScreen = Date.now(), lastSpecial = Date.now(), hadSpecial = false;
+  const es = new EventSource('/api/stage-events');
+  es.onmessage = async m => {
+    const s = JSON.parse(m.data);
+    // a battle clip on the target (automations, gallery "send", play links): his live head goes into it
+    // (a supporter effect also says who gave: name, profile picture, the multiplier to write)
+    if (s.special && s.special.at > lastSpecial && s.special.set) { lastSpecial = s.special.at; fx.playBattle(s.special.set, { who: { name: s.special.who || s.special.user, avatar: s.special.avatar }, vars: s.special.vars }); }
+    else if (!s.special && hadSpecial) fx.battle.stop('special'); // "stop" from the desk: only when the server's clip really goes away (a test button's clip is not touched by other events)
+    hadSpecial = !!s.special;
+    // the switch and the tomato style, changed on another page
+    if ('oppOn' in s) { $('#oppOn').checked = fx.useOppFace = s.oppOn !== false; if (fx.opp) fx.opp.enabled = fx.useOppFace; }
+    if (s.tomatoStyle && s.tomatoStyle !== fx.tomatoStyle) setTomatoStyle(s.tomatoStyle);
+    // the target another page picked
+    if (fx.opp && (s.pick?.at || 0) !== (window.lastPickAt || 0)) { window.lastPickAt = s.pick?.at || 0; fx.opp.applyPick(s.pick || null); }
+    // screen punches / double mode from the automations
+    // a face found by another open panel: use it if ours is older (our own watcher is normally fresher)
+    if (s.opponent && s.opponent.at > (window.lastOpp || 0)) { window.lastOpp = s.opponent.at; if (Date.now() - s.opponent.at < 45000 && (!fx.oppFaceAt || performance.now() - fx.oppFaceAt > 10000)) fx.setOpponentFace(s.opponent.url, s.opponent.at); }
+    const S = s.screen; if (S && S.at > lastScreen) { lastScreen = S.at;
+      if (S.type === 'hits') fx.screenHits(S.count || 1); else if (S.type === 'double') fx.startDouble(S.mult || 2, S.seconds || 30); else if (S.type === 'stop') fx.stopDouble(); else if (S.type === 'wake') fx.wakeUp(); else if (S.type === 'tomato') fx.throwTomato(S.count || 1, S.style || s.tomatoStyle); }
+    const L = s.live; if (!L || L.at <= lastLive) return; lastLive = L.at;
+    if (L.streamer && L.streamer !== streamerName()) return; // meant for another streamer's panel
+    const e = list.find(x => x.id === L.effect); if (!e) return;
+    if (!fx.effects[e.id]) await ensure(e);
+    log(`⚔ אוטומטי (${L.auto || 'קרב'}): ${e.title}`);
+    const r = remix[e.id]; if (r?.status === 'done') fx.triggerRemix(e.id, r.url, { force: true }); else fx.trigger(e.id, { force: true });
+  };
+} catch {}
+window.fxAllLoaded = loadInBackground().then(() => true);
+</script>
+</body>
+</html>

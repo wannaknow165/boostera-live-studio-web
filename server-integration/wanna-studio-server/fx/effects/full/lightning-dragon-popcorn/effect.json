@@ -1,0 +1,48 @@
+{
+  "id": "lightning-dragon-popcorn",
+  "posture": "sit",
+  "category": "full",
+  "title": "ברק, דרקון ופופקורן",
+  "summary": "היוצרת עוברת סדרת אפקטים של ברקים סגולים, קשקשי דרקון וקרניים, חדר בוער בלבה, עוף חול זוהר ולבסוף הופכת לדלי פופקורן מתפוצץ.",
+  "duration": 10,
+  "source": "capcaro-151",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#FF9900",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Purple lightning veins on face, neck, and chest with glowing purple eyes"
+    },
+    {
+      "t": 3,
+      "what": "Golden dragon scales, glowing cracks, and black horns grow on head"
+    },
+    {
+      "t": 6,
+      "what": "Room turns into a fiery volcano with lava while neck glows orange"
+    },
+    {
+      "t": 11,
+      "what": "Golden cracked skin and glowing eyes transform into a giant white and gold phoenix"
+    },
+    {
+      "t": 16,
+      "what": "Cosmic neon realm with elemental birds and glowing orbs"
+    },
+    {
+      "t": 20,
+      "what": "Streamer returns with glowing eyes before exploding into a cartoon popcorn bucket"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and suddenly develops glowing purple eyes and electric purple veins across their face, neck, and chest. Keep the person recognizable as the purple energy shifts into golden dragon scales, glowing magma cracks on their cheeks and neck, and black curved horns growing from their head. The room erupts into a volcanic cavern with lava as the person looks around in shock with a glowing orange neck. Bright golden cracks cover their face before they transform into a massive, radiant white and gold phoenix rising into a cosmic neon sky, then suddenly reappear at their desk surrounded by fire before exploding into a pile of popcorn and a cute red-and-white striped cartoon popcorn bucket. Cinematic lighting, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

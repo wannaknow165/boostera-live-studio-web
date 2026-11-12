@@ -1,0 +1,35 @@
+<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>קטלוג סרטוני הרפרנס (Downloads\TikTok)</title>
+<style>
+  :root{--bg:#0d0d14;--panel:#171723;--text:#f2f2f7;--muted:#9a9ab0;--accent:#a259ff}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,sans-serif;padding:16px}
+  h1{font-size:20px;margin:0 0 6px} p{color:var(--muted);margin:4px 0 12px;max-width:900px;line-height:1.5}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 16px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:2}
+  button{background:#262638;color:var(--text);border:1px solid #33334a;border-radius:999px;padding:7px 12px;font:inherit;cursor:pointer}
+  button.on{background:var(--accent);border-color:var(--accent);font-weight:700}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+  .card{background:var(--panel);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+  .card img{width:100%;aspect-ratio:9/16;object-fit:cover;background:#000;display:block}
+  .in{padding:8px 10px 10px;display:flex;flex-direction:column;gap:4px}
+  .n{color:var(--muted);font-size:12px;direction:ltr;text-align:right} .t{font-weight:700}
+  .tags{display:flex;gap:4px;flex-wrap:wrap} .tag{font-size:11px;border-radius:999px;padding:2px 7px;background:#262638}
+  .rec{background:#1f6b3a} .logo{background:#7a2230} .in2{background:#4b1d8f}
+  .s{color:var(--muted);font-size:12px;line-height:1.35;direction:ltr;text-align:left}
+</style></head><body>
+<h1>קטלוג סרטוני הרפרנס · 241 סרטונים</h1>
+<p>כל הסרטונים השונים מהתיקייה <b dir="ltr">Downloads\TikTok</b> (העותקים הכפולים הושמטו), ממוינים לפי מה שאפשר לבנות מהם. "יש לוגו" = הלוגו של היוצר המקורי צרוב בתמונה. "בפאנל" = כבר נבנה ממנו אפקט רמיקס בפאנל האפקטים.</p>
+<p><b>אלה סרטוני רפרנס לסגנון בלבד</b> (רבים מהם פרסומות של יוצרים אחרים, עם הלוגו שלהם): הם לא נכנסים למוצר כמו שהם. מה שנבנה מהם הוא שלנו ובסגנון שלהם, ובאפקטים לתומכים <b>האווטאר של התומך שנתן משתלב בפנים</b> (ראה "אפקט לתומך" בפאנל: ×2 / ×3 / ×50 / MVP). הסינון "לפי שימוש" מראה מה יש כאן לכל סוג.</p>
+<div class="bar" id="bar"></div><div class="grid" id="grid"></div>
+<script>
+const D = []; // Populate locally with authorized reference metadata.
+let cat = 'all', rec = false, clean = false, use = '';
+const USES = [...new Set(D.flatMap(v => v.u))];
+const $ = s => document.querySelector(s);
+function bar() { const n = c => D.filter(v => c === 'all' || v.c === c).length;
+  $('#bar').innerHTML = [['all', 'הכל']].concat(Object.entries(CAT)).map(([c, he]) => '<button data-c="' + c + '" class="' + (cat === c ? 'on' : '') + '">' + he + ' (' + n(c) + ')</button>').join('') + '<button id="rec" class="' + (rec ? 'on' : '') + '">רק מומלצים</button><button id="clean" class="' + (clean ? 'on' : '') + '">רק בלי לוגו</button>'
+    + '<span style="flex-basis:100%"></span><span style="color:var(--muted);align-self:center">לפי שימוש:</span>' + USES.map(u => '<button data-u="' + u + '" class="' + (use === u ? 'on' : '') + '">' + u + ' (' + D.filter(v => v.u.includes(u)).length + ')</button>').join('');
+  document.querySelectorAll('[data-u]').forEach(b => b.onclick = () => { use = use === b.dataset.u ? '' : b.dataset.u; draw(); });
+  document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { cat = b.dataset.c; draw(); }); $('#rec').onclick = () => { rec = !rec; draw(); }; $('#clean').onclick = () => { clean = !clean; draw(); }; }
+function draw() { bar(); const L = D.filter(v => (cat === 'all' || v.c === cat) && (!rec || v.r) && (!clean || !v.l) && (!use || v.u.includes(use)));
+  $('#grid').innerHTML = L.map(v => '<div class="card"><img loading="lazy" src="/public/tt/' + v.k + '.jpg" alt=""><div class="in"><div class="n">' + v.f + ' · ' + v.d + 's</div><div class="t">' + v.t + '</div><div class="tags"><span class="tag">' + CAT[v.c] + '</span>' + (v.r ? '<span class="tag rec">מומלץ</span>' : '') + (v.l ? '<span class="tag logo" title="' + v.lg.replace(/"/g, '&quot;') + '">יש לוגו</span>' : '') + (v.e ? '<span class="tag in2">בפאנל: ' + v.e + '</span>' : '') + v.u.map(u => '<span class="tag">' + u + '</span>').join('') + '</div><div class="s">' + v.s + '</div></div></div>').join('') || '<p>אין סרטונים בסינון הזה.</p>'; }
+draw();
+</script></body></html>

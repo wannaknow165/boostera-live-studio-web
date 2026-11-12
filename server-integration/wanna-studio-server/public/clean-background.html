@@ -1,0 +1,25 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>WANNA · Background (clean)</title>
+<style>
+  /* CLEAN BACKGROUND LAYER — full-screen layer BEHIND the camera (browser source, 1080x1920). Transparent when idle. */
+  html, body { margin:0; height:100%; background:transparent; overflow:hidden }
+  video, img { position:fixed; inset:0; width:100vw; height:100vh; object-fit:cover; opacity:0; transition:opacity .5s }
+  .on { opacity:1 }
+</style></head>
+<body><img id="room" alt=""><video id="clip" playsinline></video>
+<script>
+// Background videos (supporter "background" videos, streamer remixes) and background rooms, from /api/stage-events.
+// ?room=<url> keeps a room image as the resting background.
+const clip = document.getElementById('clip'), room = document.getElementById('room'), qs = new URLSearchParams(location.search);
+clip.muted = !qs.get('sound');
+if (qs.get('room')) { room.src = qs.get('room'); room.classList.add('on'); }
+let seenClip = Date.now(), seenBg = Date.now(), files = {};
+async function fileOf(id) { if (!files[id]) { const s = await (await fetch('/api/set')).json(); for (const c of s.clips) files[c.id] = c.file; for (const b of s.assets.bg) files[b.id] = b.file; } return files[id]; }
+new EventSource('/api/stage-events').onmessage = async m => {
+  const s = JSON.parse(m.data);
+  if (s.clip && s.clip.at > seenClip) { seenClip = s.clip.at; const f = await fileOf(s.clip.id); if (f) { clip.src = f; clip.currentTime = 0; clip.play().catch(() => {}); clip.classList.add('on'); } }
+  if (!s.clip) { clip.classList.remove('on'); clip.pause(); }
+  if (s.bg && s.bg.at > seenBg) { seenBg = s.bg.at; const f = s.bg.url || await fileOf(s.bg.id); if (f) { room.src = f; room.classList.add('on'); } else room.classList.remove('on'); }
+};
+clip.onended = () => clip.classList.remove('on');
+</script></body></html>

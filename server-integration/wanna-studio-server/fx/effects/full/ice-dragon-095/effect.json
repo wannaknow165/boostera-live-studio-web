@@ -1,0 +1,52 @@
+{
+  "id": "ice-dragon-095",
+  "posture": "sit",
+  "category": "full",
+  "title": "דרקון קרח",
+  "summary": "הסטרימרית עם עיניים זוהרות בכחול הופכת לדרקון קרח ענק שמקפיא את החדר, עף למצודת קרח מרחפת ובוקע ביצה של דרקון קטן.",
+  "duration": 10,
+  "source": "capcaro-095",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#00A2FF",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Close-up of streamer with glowing blue eyes"
+    },
+    {
+      "t": 1,
+      "what": "Pull back to futuristic gaming room as icy smoke swirls and she crouches onto the floor"
+    },
+    {
+      "t": 3,
+      "what": "She transforms into a massive white and blue ice dragon that roars and breathes frost at the camera"
+    },
+    {
+      "t": 7,
+      "what": "Screen freezes and shatters, revealing the dragon flying over snowy mountains under auroras"
+    },
+    {
+      "t": 11,
+      "what": "Dragon flies through an icy portal into a floating fortress"
+    },
+    {
+      "t": 14,
+      "what": "Dragon lands inside an ice cavern in front of a giant glowing blue cracking egg"
+    },
+    {
+      "t": 17,
+      "what": "Egg hatches into a baby ice dragon that flies around the big dragon as Both roar towards camera"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and their eyes suddenly glow bright ice-blue. Keep the person recognizable until the full transformation covers them. As the camera pulls back, swirling white frost engulfs them as they crouch down on the floor, rapidly morphing into a massive, spiky white-and-blue ice dragon with glowing blue eyes and mouth. The dragon roars and blasts freezing mist straight at the lens, freezing the screen which shatters into an icy mountain landscape under blue auroras. The dragon flies into a floating ice fortress and lands before a giant glowing blue egg, which hatches into a small flying ice dragon. Both dragons pose and roar toward the camera amid falling ice shards. Cinematic cool blue lighting, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

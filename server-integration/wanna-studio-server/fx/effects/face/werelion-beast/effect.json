@@ -1,0 +1,74 @@
+{
+  "id": "werelion-beast",
+  "posture": "sit",
+  "category": "face",
+  "title": "אריה פראי",
+  "summary": "הסטרימר הופך לאיש-אריה זועם עם עיניים זוהרות, רעמה שחורה וטפרים ששולח יד אל המצלמה.",
+  "duration": 8.1,
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#FF8C00",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Normal streamer sitting in chair looking at camera"
+    },
+    {
+      "t": 1,
+      "what": "Extreme close-up on eye turning glowing amber, pulling back to show dark veins and small fangs"
+    },
+    {
+      "t": 4,
+      "what": "Medium shot with dark veins spreading and fiery embers floating"
+    },
+    {
+      "t": 5,
+      "what": "Head morphs into a roaring lion with dark mane, shirt tears"
+    },
+    {
+      "t": 6,
+      "what": "Arms become furry lion limbs with sharp claws resting on desk"
+    },
+    {
+      "t": 8,
+      "what": "Lion beast lunges forward, swiping a giant clawed paw directly at the camera"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and suddenly transforms into a ferocious werelion in one continuous 9-second shot. Keep the person recognizable until the full lion head transformation covers the face. First, zoom rapidly into their eye as the iris turns glowing fiery amber with a vertical slit pupil, then pull back to reveal dark cracked veins spreading across their skin and small fangs appearing alongside floating orange embers. Next, their head violently morphs into a roaring lion with a thick dark brown and black mane, tearing their black shirt as their torso bulks up and arms sprout golden-brown fur and giant sharp claws. Finally, the lion beast lunges forward over the desk, swiping a massive clawed paw directly at the lens. Dramatic dark cinematic lighting with warm amber eye glow and cool blue background accents, vertical framing."
+  },
+  "assets": [
+    {
+      "id": "fxlayer",
+      "type": "layer",
+      "file": "green/layer.webm",
+      "track": "green/track.json",
+      "trackFrom": "reference",
+      "afterTrack": "hold"
+    }
+  ],
+  "timeline": [
+    {
+      "t": 0,
+      "d": 7.8,
+      "do": "layer",
+      "asset": "fxlayer",
+      "scale": 1
+    },
+    {
+      "t": 2.9,
+      "d": 0.8,
+      "do": "vanish"
+    },
+    {
+      "t": 7.4,
+      "d": 0.7,
+      "do": "return"
+    }
+  ]
+}

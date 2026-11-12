@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WANNA · קישורים ל-Studio</title>
+<style>
+  :root { --bg:#0b0b12; --panel:#14141f; --panel2:#1b1b29; --line:#262638; --text:#f1f1f6; --muted:#9696ad; --acc:#f5c842; --ok:#3ddc84 }
+  * { box-sizing:border-box } body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,"Segoe UI",Arial,sans-serif }
+  header { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:center; flex-wrap:wrap; position:sticky; top:0; background:var(--bg); z-index:2 }
+  h1 { margin:0; font-size:20px } h1 b { color:var(--acc) }
+  main { padding:16px 20px 60px; max-width:1500px; margin:0 auto }
+  .btn { background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:9px; padding:6px 10px; font:inherit; cursor:pointer; white-space:nowrap; text-decoration:none; font-size:13px }
+  .btn:hover { border-color:#3a3a55 } .btn.ok { border-color:var(--ok); color:var(--ok) }
+  input { background:#0f0f18; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 8px; font:inherit; direction:ltr }
+  h2 { font-size:15px; margin:22px 0 8px } .sub { color:var(--muted); font-size:12px }
+  table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden }
+  th { text-align:start; color:var(--muted); font-size:12px; font-weight:600; padding:8px; background:var(--panel2) }
+  td { padding:6px 8px; border-top:1px solid var(--line); vertical-align:middle }
+  .url { font-family:ui-monospace,Consolas,monospace; font-size:11.5px; direction:ltr; text-align:left; color:#c9c9e0; word-break:break-all }
+  .thumb { width:40px; height:70px; border-radius:6px; background:#1c1c28 center/cover; border:1px solid var(--line) }
+  .row { display:flex; gap:6px; align-items:center; flex-wrap:wrap }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔗 <b>קישורים</b> לכל אפקט · ל-Studio</h1>
+  <span class="row sub">כתובת השרת <input id="base" size="32"></span>
+  <span class="row sub">מפתח (מבחוץ בלבד) <input id="ck" size="26" placeholder="לא צריך מהמחשב הזה"></span>
+  <span class="row" style="margin-inline-start:auto"><button class="btn" id="csv">⬇ CSV</button><a class="btn" href="/">🎬 גלריה</a></span>
+</header>
+<main>
+  <div class="sub">לכל אפקט: <b>קישור קובץ</b> — הסרטון עצמו (לטעון ב-Studio כווידאו) · <b>קישור הפעלה</b> — פתיחה שלו מפעילה את האפקט עכשיו על השכבה (לכפתור ב-Studio). "▶" = לנסות.</div>
+  <div id="out"></div>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+let data = null;
+try { $('#base').value = localStorage.getItem('links-base') || location.origin; $('#ck').value = localStorage.getItem('links-ck') || ''; } catch { $('#base').value = location.origin; }
+const base = () => $('#base').value.replace(/\/$/, ''), ck = () => $('#ck').value.trim();
+const withKey = u => ck() ? u + (u.includes('?') ? '&' : '?') + 'ck=' + encodeURIComponent(ck()) : u;
+$('#base').oninput = $('#ck').oninput = () => { try { localStorage.setItem('links-base', $('#base').value); localStorage.setItem('links-ck', $('#ck').value); } catch {} render(); };
+
+// every item that can go into the Studio, with its file link and its play link
+function items() {
+  const L = data, out = [];
+  const add = (group, name, id, file, play, extra = '') => out.push({ group, name, id, file: file ? base() + file : '', play: play ? withKey(base() + play) : '', extra });
+  for (const r of L.foreground.overlays) add('🥊 אוברליי (פאנל ישן)', r.name, r.id.replace(/^ov-/, ''), r.url, `/play/overlay/${encodeURIComponent(r.id.replace(/^ov-/, ''))}`, r.people?.[0] ? '@' + r.people[0].name : '');
+  for (const r of L.foreground.battle) { const bid = r.id.replace(/^battle-/, '');
+    // fan_* = a supporter effect: whoever gave is in it (the link says who: name, profile picture, the multiplier to write)
+    if (/^fan_/.test(bid)) add('💛 אפקט לתומך (התומך עצמו בפנים)', r.name, bid, r.url, `/play/battle/${bid}?user=NAME&avatar=PICTURE_URL${bid === 'fan_burst' ? '&mult=3' : ''}`, 'user = שם התומך · avatar = כתובת תמונת הפרופיל שלו · mult = הכפל שייכתב (כל מספר: 2, 3, 50…)');
+    else add('⚔ קרב על המטרה (הראש החי של מי שמולי)', r.name, bid, r.url, `/play/battle/${encodeURIComponent(bid)}`, 'הראש של המתחרה נכנס לבד כשיש קרב על מסך הטלפון'); }
+  for (const r of L.foreground.gifts) add('🟣 מתנות תומכים (פרונט)', r.name, r.id.replace(/^front-/, ''), r.url, `/play/gift/${encodeURIComponent(r.id.replace(/^front-/, ''))}`);
+  add('🥊 על המסך', 'WAKE UP — הגמד צועק, כאפות, בום ורעידה', 'wake', '', '/play/screen/wake');
+  add('🥊 על המסך', 'מכה אחת של הגמד', 'hits-1', '', '/play/screen/hits?count=1');
+  add('🥊 על המסך', '×2 — הגמד מסטיר', 'hits-2', '', '/play/screen/hits?count=2');
+  add('🥊 על המסך', 'דאבל ×2 — דופק כל הזמן 30 שניות', 'double-2', '', '/play/screen/double?mult=2&seconds=30');
+  add('🥊 על המסך', '🍅 עגבנייה — נזרקת על הראש החי של המתחרה (בלי קרב: על המסך)', 'tomato', '', '/play/screen/tomato?count=1');
+  add('🥊 על המסך', '🍅 עגבנייה בצורת הראש שלו (מתנפצת ונמרחת על המסך)', 'tomato-head', '', '/play/screen/tomato?count=1&style=head');
+  add('🥊 על המסך', '🍅 3 עגבניות', 'tomato-3', '', '/play/screen/tomato?count=3');
+  add('🥊 על המסך', 'עצור הכל', 'stop', '', '/play/stop');
+  for (const r of L.background.videos) add('🔵 רקע (סרטוני תומכים)', r.name, r.id.replace(/^bg-/, ''), r.url, `/play/clip/${encodeURIComponent(r.id.replace(/^bg-/, ''))}`);
+  for (const r of L.background.remixes) add('🔵 רקע (רמיקסים)', r.name, r.id, r.url, `/play/clip/${encodeURIComponent(r.id)}`);
+  for (const r of L.background.rooms) add('🖼 חדרים', r.name, r.id, r.url, '');
+  for (const r of L.live) add('🟠 אפקט חי על המשדרת', r.name, r.id, '', `/play/live/${encodeURIComponent(r.id)}`, r.remixReady.length ? 'רמיקס מוכן ל: ' + r.remixReady.join(', ') : 'שכבה (בלי רמיקס)');
+  add('📺 שכבות נקיות (מקור דפדפן)', 'פרונט שקוף', 'clean-foreground', '/clean/foreground', '');
+  add('📺 שכבות נקיות (מקור דפדפן)', 'רקע', 'clean-background', '/clean/background', '');
+  add('📺 שכבות נקיות (מקור דפדפן)', 'הכל ביחד (מצלמה + אפקטים)', 'clean-program', '/clean/program?src=phone', '');
+  return out;
+}
+function render() {
+  const all = items(), groups = [...new Set(all.map(x => x.group))];
+  $('#out').innerHTML = groups.map(g => `<h2>${g} <span class="sub">(${all.filter(x => x.group === g).length})</span></h2><table><thead><tr><th style="width:52px"></th><th>שם</th><th>קישור קובץ</th><th>קישור הפעלה</th><th style="width:1%"></th></tr></thead><tbody>${
+    all.filter(x => x.group === g).map(x => `<tr><td>${x.file && /\.(webm|mp4|jpg)/.test(x.file) ? `<div class="thumb" style="background-image:url('/media/_thumb?src=${encodeURIComponent(x.file.replace(base(), ''))}')"></div>` : ''}</td>
+      <td><b>${x.name}</b>${x.extra ? `<div class="sub" dir="auto">${x.extra}</div>` : ''}<div class="url" style="color:var(--muted)">${x.id}</div></td>
+      <td>${x.file ? `<div class="row"><span class="url">${x.file}</span><button class="btn" data-copy="${x.file}">📋</button></div>` : '<span class="sub">—</span>'}</td>
+      <td>${x.play ? `<div class="row"><span class="url">${x.play}</span><button class="btn" data-copy="${x.play}">📋</button></div>` : '<span class="sub">—</span>'}</td>
+      <td>${x.play ? `<button class="btn" data-play="${x.play}">▶</button>` : x.file ? `<a class="btn" href="${x.file}" target="_blank">▶</a>` : ''}</td></tr>`).join('')}</tbody></table>`).join('');
+  document.querySelectorAll('[data-copy]').forEach(b => b.onclick = async () => { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = '✓'; b.classList.add('ok'); setTimeout(() => { b.textContent = '📋'; b.classList.remove('ok'); }, 1200); });
+  document.querySelectorAll('[data-play]').forEach(b => b.onclick = async () => { const r = await fetch(b.dataset.play.replace(base(), '')); b.textContent = r.ok ? '✓' : '✗'; setTimeout(() => b.textContent = '▶', 1200); });
+}
+$('#csv').onclick = () => {
+  const rows = [['group', 'name', 'id', 'file_url', 'play_url', 'note'], ...items().map(x => [x.group, x.name, x.id, x.file, x.play, x.extra])];
+  const csv = '﻿' + rows.map(r => r.map(v => `"${String(v || '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'wanna-studio-links.csv'; a.click();
+};
+fetch('/api/layers').then(r => r.json()).then(j => { data = j; render(); });
+</script>
+</body>
+</html>

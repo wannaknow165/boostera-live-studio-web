@@ -1,0 +1,40 @@
+{
+  "id": "demon-veins",
+  "posture": "sit",
+  "category": "body",
+  "title": "השתלטות שד",
+  "summary": "הסטרימר מצטלם עם עיניים שחורות וורידים אפלים המתפשטים על פניו וזרועותיו, נעמד ומזנק לעבר המצלמה בחיוך שטני ושיניים חדות.",
+  "duration": 10,
+  "source": "capcaro-137",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#1E3A8A",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Extreme close-up of black eye with screen reflections, zooming out to face with dark veins around eyes."
+    },
+    {
+      "t": 2,
+      "what": "Sitting in chair, dark veins spread down to the neck as he smiles sinisterly."
+    },
+    {
+      "t": 4,
+      "what": "Stands up; thick black veins spread across his muscular arms and hands turn clawed."
+    },
+    {
+      "t": 8,
+      "what": "Lunges aggressively at the camera with a wide demonic mouth full of sharp teeth."
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and undergoes a demonic possession in one continuous 10-second shot. Keep the person recognizable throughout. Starting from a close-up of their face, their eyes turn completely pitch-black while dark, branching veins spread outward from their eye sockets across their temples and cheeks. As the camera pulls back, they sit in their chair smiling sinisterly while the black veins creep down their neck. They slowly stand up, flexing their arms as thick, dark corruption veins spread down their biceps and forearms, and their fingertips darken into sharp claws. Suddenly, their mouth stretches unnaturally wide, revealing rows of razor-sharp demonic teeth, and they lunge aggressively right at the camera. Dark moody room lighting with blue neon accents, cinematic horror style, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

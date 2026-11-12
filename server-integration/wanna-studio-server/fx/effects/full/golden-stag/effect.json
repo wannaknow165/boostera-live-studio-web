@@ -1,0 +1,48 @@
+{
+  "id": "golden-stag",
+  "posture": "sit",
+  "category": "full",
+  "title": "אייל זהב",
+  "summary": "העיניים והפנים של היוצרת זוהרים בסדקי זהב עד שהיא הופכת לאייל מלכותי עם קרניים מוזהבות ביער מואר.",
+  "duration": 10,
+  "source": "capcaro-188",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#FFB300",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Eyes glow bright golden-orange."
+    },
+    {
+      "t": 1,
+      "what": "Golden lightning cracks spread across cheeks and neck."
+    },
+    {
+      "t": 3,
+      "what": "Antlers, deer ears, and golden armor with a chest crystal grow on her."
+    },
+    {
+      "t": 4,
+      "what": "She fully transforms into a majestic golden stag standing in a glowing forest stream."
+    },
+    {
+      "t": 6,
+      "what": "A bright golden fire explosion fills the screen, transitioning to a close-up of the stag."
+    },
+    {
+      "t": 11,
+      "what": "Camera pulls back as the stag walks forward through the stream, ending in a bright light burst."
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and their eyes suddenly glow bright golden-orange. Glowing golden cracks spread across their cheeks and neck while keeping the person recognizable until the full transformation covers the face. Golden antlers, deer ears, and ornate golden armor with a bright diamond chest crystal sprout from their body. The camera pulls back as they fully transform into a majestic golden stag with glowing leaf-covered antlers standing in a dark enchanted forest stream under golden light beams. A fiery golden explosion transitions to a close-up of the stag's face with glowing eyes and forehead crystal, before it walks forward in radiant golden lighting, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

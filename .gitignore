@@ -1,0 +1,26 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+server.env
+!server.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+# Dependencies and runtime state
+node_modules/
+runtime/
+data/
+.openai/
+*.log
+*.zip
+*.lnk
+__pycache__/
+# Personal media, imports, recordings and generated customer content
+server-integration/wanna-studio-server/media/
+server-integration/wanna-studio-server/fx/incoming/
+server-integration/wanna-studio-server/fx/effects/**/remix/
+server-integration/wanna-studio-server/public/tt/
+
+!dist/BOOSTERA-LIVE-Web.zip

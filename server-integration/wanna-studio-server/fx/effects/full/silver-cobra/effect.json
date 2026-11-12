@@ -1,0 +1,44 @@
+{
+  "id": "silver-cobra",
+  "posture": "sit",
+  "category": "full",
+  "title": "קוברה כסופה",
+  "summary": "כובע קוסמים עם סמל נחש מרחף על ראשה והופך אותה לנחשית כסופה ולבסוף לקוברה ענקית שמזנקת למצלמה.",
+  "duration": 10,
+  "source": "capcaro-088",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#4CA8FF",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Glowing blue wizard hat with cobra emblem floats down onto her head"
+    },
+    {
+      "t": 1,
+      "what": "Eyes glow cyan and body turns into silver snake scales as she stands up"
+    },
+    {
+      "t": 3,
+      "what": "Lower body becomes a giant coiled silver serpent tail"
+    },
+    {
+      "t": 5,
+      "what": "Upper body dissolves in blue smoke into a giant silver king cobra"
+    },
+    {
+      "t": 7,
+      "what": "Books fly around as the cobra hisses and lunges at the camera"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and a glowing icy-blue wizard hat with a silver cobra emblem floats down onto their head. Keep the person recognizable as their eyes glow bright cyan and their clothes transform into shimmering silver snake scales with a white aura. They rise up as their lower body becomes a giant coiled silver serpent tail. In a burst of blue smoke, their human torso and hat vanish, completing the transformation into a massive, coiled silver king cobra with glowing blue eyes in the middle of the room. Floating books and candles swirl around as the giant cobra opens its jaws and lunges straight into the camera. Cinematic blue rim lighting, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

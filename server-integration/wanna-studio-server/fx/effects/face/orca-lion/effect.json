@@ -1,0 +1,52 @@
+{
+  "id": "orca-lion",
+  "posture": "sit",
+  "category": "face",
+  "title": "לוויתן ואריה",
+  "summary": "הסטרימר צולל מתחת למים עם לוויתן קטלן, המסך נסדק לסוואנה בזהב והוא הופך לאריה שואג.",
+  "duration": 10,
+  "source": "capcaro-162",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#FFA500",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Eyes glow blue, ceiling turns into water with an orca swimming down"
+    },
+    {
+      "t": 1,
+      "what": "Room floods into an underwater ocean scene with white foam, dark markings appear on face and neck"
+    },
+    {
+      "t": 3,
+      "what": "Golden glowing cracks shatter the underwater background"
+    },
+    {
+      "t": 4,
+      "what": "Scene shatters into a golden sunset savanna, fur grows on shoulders"
+    },
+    {
+      "t": 5,
+      "what": "Golden dust cloud engulfs the head"
+    },
+    {
+      "t": 6,
+      "what": "Head morphs into a roaring lion head with a thick mane, golden markings on arms, a second lion walks behind"
+    },
+    {
+      "t": 9,
+      "what": "Lion head morphs back into the person with long mane-like hair and gold face paint"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and their eyes suddenly glow bright blue as water bursts from above with an orca whale swimming over their head. The room floods into an underwater ocean scene with white swirling foam while their clothes turn glossy wet and dark gills appear on their cheeks, keeping the person recognizable. Golden glowing cracks shatter the ocean like glass, revealing a golden sunset African savanna. Golden dust swirls around their head as a thick fur mane grows over their shoulders and their head fully transforms into a roaring male lion with glowing amber eyes while another lion walks up behind them. Finally, the lion head morphs back into the recognizable person now sporting a wild mane of hair and golden tribal markings. Dramatic blue underwater lighting shifting to warm golden sunset backlighting, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

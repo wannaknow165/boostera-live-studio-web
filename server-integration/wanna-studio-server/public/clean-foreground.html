@@ -1,0 +1,157 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>WANNA · Foreground (clean)</title>
+<style>
+  /* CLEAN FOREGROUND LAYER — transparent page for the Studio (browser source, 1080x1920). Nothing here but effects. */
+  html, body { margin:0; height:100%; background:transparent; overflow:hidden }
+  canvas { position:fixed; inset:0; width:100vw; height:100vh; object-fit:contain }
+</style></head>
+<body><canvas id="c" width="1080" height="1920"></canvas>
+<script type="module">
+// Plays everything that goes IN FRONT of the camera: gifts/overlays, battle clips on a player, the gnome's screen punches,
+// double mode, WAKE UP, tomatoes, and the battle clips on the TARGET's live head (the one facing us on the phone's battle screen,
+// or the head the operator picked: /fx/opponent.js + /fx/battle-stage.js). Driven by the server's /api/stage-events (automations + Studio + gallery "send").
+// ?opp=0 = never look at the phone here (battle clips then play as they are);  ?sound=1 = with sound.
+// (The camera itself is not here, so "the screen shakes" becomes the gnome + glass + flash shaking in this layer.)
+import { newHeadTomato, drawHeadTomato } from '/fx/head-tomato.js';
+import { Opponent } from '/fx/opponent.js';
+import { BattleStage } from '/fx/battle-stage.js';
+const c = document.getElementById('c'), ctx = c.getContext('2d'), W = c.width, H = c.height;
+const vids = {}; const vid = url => { if (!vids[url]) { const v = document.createElement('video'); v.src = url; v.muted = !new URLSearchParams(location.search).get('sound'); v.playsInline = true; v.preload = 'auto'; vids[url] = v; } return vids[url]; };
+let layers = [];                 // { v, fit: 'cover'|'bottom', hits:[], fired:Set, until, loop, onEnd }
+let impacts = [], wake = null, double = null, gnome = {};
+let tomatoes = [], headTomatoes = [], opp = {}; // opp = { url, at, canvas }: the current opponent's face (from the server)
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const qs = new URLSearchParams(location.search);
+// the battle target (his live head) + the battle clips that use it. A hit in a clip = a jolt of this layer (no cracked glass: his head is hit, not our screen)
+// ?oppsrc= : a stand-in for the phone (tests) — a video file, or the address of another phone.jpg (its stream is phone.mjpeg next to it)
+const oppSrc = qs.get('oppsrc') || '', oppVid = /\.(mp4|webm)(\?|$)/i.test(oppSrc);
+const tracker = qs.get('opp') === '0' ? null : new Opponent({ upload: false, video: oppVid ? oppSrc : null, ...(oppSrc && !oppVid ? { snap: oppSrc, stream: oppSrc.includes('phone.jpg') ? oppSrc.replace('phone.jpg', 'phone.mjpeg') : null } : {}), region: qs.get('oppRegion') ? qs.get('oppRegion').split(',').map(Number) : undefined, needHost: qs.get('oppHost') !== '0' });
+// (a clip playing alone, with no target: the gnome punches the screen itself, so the glass cracks and flashes as it always did)
+const battle = new BattleStage({ opp: tracker, sound: !!qs.get('sound'), onHit: h => { impact(h.big, false, !h.alone); if (h.splat && h.muted && qs.get('sound')) splat(); } });
+
+async function init() {
+  const j = await (await fetch('/api/battle')).json(), by = Object.fromEntries(j.clips.map(x => [x.id, x]));
+  const g = id => by[id] && { id, url: by[id].url, hits: by[id].meta?.hits || [] };
+  gnome = { 1: g('gnome_punch_short'), 2: g('multiplier_x2'), 3: g('multiplier_x3'), 5: g('glove_x5') };
+  for (const x of Object.values(gnome)) if (x) vid(x.url).load();
+}
+function play(url, opt = {}) {
+  const v = vid(url); v.currentTime = opt.from || 0; v.play().catch(() => {});
+  const L = { v, fit: opt.fit || 'cover', hits: opt.hits || [], fired: new Set((opt.hits || []).map((t, i) => t < (opt.from || 0) ? i : -1).filter(i => i >= 0)), until: opt.until || null, onEnd: opt.onEnd, tag: opt.tag };
+  layers = layers.filter(l => l.tag !== opt.tag || !opt.tag); layers.push(L); return L;
+}
+const gnomePlay = (n, from = 0, until = null, onEnd) => { const x = gnome[n] || gnome[1]; if (x) play(x.url, { hits: x.hits, from, until, tag: 'gnome', onEnd }).id = x.id; return !!x; };
+const impact = (big, mega, soft) => impacts.push({ at: performance.now(), x: 0.5 + (Math.random() - 0.5) * (mega ? 0 : 0.35), y: mega ? 0.45 : 0.38 + (Math.random() - 0.5) * 0.2, seed: Math.random() * 1e6, big, mega, soft }); // soft = a jolt only (tomato): no cracked glass, no flash
+
+// ---- tomatoes: with the opponent's face -> a head-tomato; without -> the plain tomato clip. Both smash on the screen ----
+function loadOpp(o) { // o = stage.opponent from the server
+  if (!o?.url || Date.now() - o.at > 45000) { opp = {}; return Promise.resolve(); }
+  if (o.url === opp.url) { opp.at = o.at; return Promise.resolve(); }
+  return new Promise(done => { const im = new Image(); im.onload = () => { const k = document.createElement('canvas'); k.width = k.height = 320; k.getContext('2d').drawImage(im, 0, 0, 320, 320); opp = { url: o.url, at: o.at, canvas: k }; done(); }; im.onerror = () => done(); im.src = o.url; });
+}
+function throwTomato(count = 1, style = 'live') {
+  for (let i = 0; i < Math.max(1, Math.min(10, count)); i++) setTimeout(() => {
+    // his LIVE head is on the screen and the tomato lands on it (style "head" = the tomato itself has his face)
+    if (style !== 'head' && battle.clips.tomato?.head && battle.target()) return battle.play('tomato', { jitter: i ? (Math.random() - 0.5) * 0.06 : 0, tag: 'tomato' });
+    const face = tracker?.face();
+    if (face) return headTomatoes.push(newHeadTomato(face));
+    if (opp.canvas && Date.now() - opp.at < 45000) return headTomatoes.push(newHeadTomato(opp.canvas));
+    const v = document.createElement('video'); v.src = '/media/battle/tomato.webm'; v.muted = true; v.playsInline = true; v.play().catch(() => {});
+    tomatoes.push({ v, x: 0.5 + (Math.random() - 0.5) * 0.3, y: 0.42 + (Math.random() - 0.5) * 0.2, hit: false });
+  }, i * 550);
+}
+
+function crack(x, y, R, seed, a) {
+  let s = seed; const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = '#fff'; ctx.shadowColor = '#000'; ctx.shadowBlur = 4; ctx.lineCap = 'round';
+  const rays = 9 + Math.floor(rnd() * 5);
+  for (let i = 0; i < rays; i++) { let ang = i / rays * Math.PI * 2 + rnd() * 0.4, px = x, py = y, len = R * (0.45 + rnd() * 0.65); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(px, py);
+    for (let k = 0; k < 5; k++) { ang += (rnd() - 0.5) * 0.5; px += Math.cos(ang) * len / 5; py += Math.sin(ang) * len / 5; ctx.lineTo(px, py); } ctx.stroke(); }
+  ctx.restore();
+}
+// the boom is a sound (deep thump + rumble), synthesized
+let ac; function boomSound() { try { ac ||= new AudioContext(); if (ac.state === 'suspended') ac.resume(); const t = ac.currentTime, out = ac.createGain(); out.gain.value = 0.9; out.connect(ac.destination);
+  const o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(32, t + 0.9); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(1, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.6); o.connect(g).connect(out); o.start(t); o.stop(t + 1.7);
+  const n = ac.createBufferSource(), b = ac.createBuffer(1, ac.sampleRate * 1.8, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.5);
+  const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; n.buffer = b; n.connect(lp).connect(out); n.start(t); } catch {} }
+// a short wet splat for the tomato (noise burst + low thud), synthesized
+function splat() { try { ac ||= new AudioContext(); if (ac.state === 'suspended') ac.resume(); const t = ac.currentTime, n = ac.createBufferSource(), b = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.35), ac.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3);
+  const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.setValueAtTime(1400, t); f.frequency.exponentialRampToValueAtTime(220, t + 0.3); f.Q.value = 0.8; n.buffer = b; n.connect(f).connect(ac.destination); n.start(t);
+  const o = ac.createOscillator(), og = ac.createGain(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(50, t + 0.18); og.gain.setValueAtTime(0.7, t); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.22); o.connect(og).connect(ac.destination); o.start(t); o.stop(t + 0.25); } catch {} }
+function text(str, y, size, fill, alpha = 1) { ctx.save(); ctx.direction = 'ltr'; ctx.textAlign = 'center'; ctx.globalAlpha = alpha; ctx.font = `900 ${size}px Impact, system-ui, Arial`; ctx.lineWidth = size / 8; ctx.strokeStyle = '#000'; ctx.fillStyle = fill; ctx.strokeText(str, W / 2, y); ctx.fillText(str, W / 2, y); ctx.restore(); }
+
+function frame() {
+  const now = performance.now(); ctx.clearRect(0, 0, W, H);
+  // shake of THIS layer (the camera is the Studio's): sum of recent impacts
+  let sx = 0, sy = 0, zoom = 1, flash = 0;
+  for (const p of impacts) { const t = now - p.at, k = Math.exp(-t / (p.mega ? 520 : p.big ? 130 : 95)), amp = (p.mega ? 0.075 : p.big ? 0.05 : 0.032) * W;
+    sx += Math.sin(t / 16 + p.seed) * amp * k; sy += Math.cos(t / 13 + p.seed) * amp * 0.8 * k; zoom = Math.max(zoom, 1 + (p.mega ? 0.12 : 0.06) * Math.exp(-t / 160)); if (!p.soft) flash = Math.max(flash, (p.mega ? 0.9 : p.big ? 0.6 : 0.4) * Math.exp(-t / (p.mega ? 140 : 70))); }
+  ctx.save(); ctx.translate(W / 2 + sx, H / 2 + sy); ctx.scale(zoom, zoom); ctx.translate(-W / 2, -H / 2);
+  for (const L of [...layers]) {
+    const v = L.v;
+    if (v.videoWidth) { const sc = L.fit === 'bottom' ? W / v.videoWidth : Math.max(W / v.videoWidth, H / v.videoHeight), w = v.videoWidth * sc, h = v.videoHeight * sc; ctx.drawImage(v, (W - w) / 2, H - h, w, h); }
+    L.hits.forEach((t, i) => { if (!L.fired.has(i) && v.currentTime >= t) { L.fired.add(i); impact(i % 3 === 2); } });
+    if (v.ended || (v.duration && v.currentTime >= v.duration - 0.04) || (L.until && v.currentTime >= L.until)) { v.pause(); layers.splice(layers.indexOf(L), 1); L.onEnd?.(); }
+  }
+  if (battle.busy) battle.draw(ctx, W, H, now); // battle clips, with the target's head when there is one
+  // plain tomatoes (the clip: flies in for 1.1 s, then splats)
+  tomatoes = tomatoes.filter(T => { const v = T.v;
+    if (v.videoWidth) { const w = W * 1.44, h = w * v.videoHeight / v.videoWidth; ctx.drawImage(v, T.x * W - 0.5 * w, T.y * H - 0.43 * h, w, h); }
+    if (!T.hit && v.currentTime >= 1.1) { T.hit = true; impact(false, false, true); splat(); }
+    return !v.ended; });
+  // head-tomatoes: the opponent's face as a tomato, smashing and smearing down
+  headTomatoes = headTomatoes.filter(T => { const st = drawHeadTomato(ctx, W, H, T, now); if (st === 'hit') { impact(false, false, true); splat(); } return st !== 'done'; });
+  ctx.restore();
+  impacts = impacts.filter(p => now - p.at < (p.mega ? 2600 : 1600));
+  for (const p of impacts) if (!p.soft) crack(p.x * W, p.y * H, W * (p.mega ? 0.75 : p.big ? 0.42 : 0.3), p.seed, Math.max(0, 1 - (now - p.at) / (p.mega ? 2400 : 1400)) * 0.9);
+  if (flash > 0.01) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = flash; ctx.fillStyle = '#fff3e0'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+  // double banner
+  if (double) { if (now > double.until) { double = null; battle.stop('double'); layers = layers.filter(l => l.tag !== 'gnome'); } else { const left = (double.until - now) / (double.until - double.start); text(`×${double.mult} 🥊`, H * 0.12, Math.round(W / 9 * (1 + 0.06 * Math.sin(now / 90))), '#ffcf33'); ctx.fillStyle = '#0008'; ctx.fillRect(W * 0.2, H * 0.135, W * 0.6, 12); ctx.fillStyle = '#ffcf33'; ctx.fillRect(W * 0.2, H * 0.135, W * 0.6 * left, 12); } }
+  // WAKE UP: sleep -> slaps -> BOOM
+  if (wake) {
+    const t = (now - wake.t0) / 1000, SLEEP = 1.4, BOOM = 3.4;
+    if (t < SLEEP + 0.2) { ctx.fillStyle = `rgba(5,5,20,${Math.min(0.5, t / SLEEP * 0.5)})`; ctx.fillRect(0, 0, W, H); for (let i = 0; i < 3; i++) { const k = (t * 0.9 + i * 0.33) % 1; ctx.save(); ctx.globalAlpha = Math.sin(Math.PI * k) * 0.9; ctx.fillStyle = '#c9d4ff'; ctx.font = `800 ${Math.round(W / (10 - i * 2))}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('Z', W * (0.62 + i * 0.08), H * (0.34 - k * 0.18 - i * 0.05)); ctx.restore(); } }
+    // the gnome bursts in and SHOUTS "WAKE UP!" (voice only, nothing written)
+    if (t >= SLEEP && wake.stage === 'sleep') { wake.stage = 'slap'; gnomePlay(2, 1.25, 3.3); try { new Audio('/media/fx/assets/wake-up.mp3').play().catch(() => {}); } catch {} }
+    if (t >= BOOM && wake.stage === 'slap') { wake.stage = 'boom'; layers = layers.filter(l => l.tag !== 'gnome'); impact(true, true); boomSound(); }
+    if (t > 5) wake = null;
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---- stage events from the server ----
+let seen = { overlay: Date.now(), special: Date.now(), screen: Date.now() }, pickAt = 0, hadSpecial = false, tomatoStyle = 'live';
+fetch('/api/opponent-face').then(r => r.json()).then(j => { loadOpp(j.opponent); if (j.tomatoStyle) tomatoStyle = j.tomatoStyle; if (tracker) { tracker.enabled = j.enabled !== false; tracker.applyPick(j.pick || null); pickAt = j.pick?.at || 0; } }).catch(() => {});
+new EventSource('/api/stage-events').onmessage = m => {
+  const s = JSON.parse(m.data), oppReady = loadOpp(s.opponent); // the newest opponent face rides along with every event
+  if (s.overlay && s.overlay.at > seen.overlay) { seen.overlay = s.overlay.at; play(`/media/overlays/${encodeURIComponent(s.overlay.id)}.webm`, { fit: 'bottom', tag: 'overlay' }); }
+  if (tracker) { if ('oppOn' in s) tracker.enabled = s.oppOn !== false; if ((s.pick?.at || 0) !== pickAt) { pickAt = s.pick?.at || 0; tracker.applyPick(s.pick || null); } }
+  if (s.tomatoStyle) tomatoStyle = s.tomatoStyle;
+  // never twice: the same clip was started a moment ago (two rules on one event), or it already runs as the double's own
+  // clip — on the head (only the double's chain carries onEnd) or as the gnome punching the screen
+  if (s.special && s.special.at > seen.special && s.special.set) { seen.special = s.special.at; const id = s.special.set;
+    // (a supporter effect — layer "fan" — also says who gave; the stage itself drops the same one twice and lines the others up)
+    const sp = s.special, opt = { tag: 'special', who: { name: sp.who || sp.user, avatar: sp.avatar }, vars: sp.vars };
+    battle.load().then(b => { const fan = b.clips[id]?.head?.layer === 'fan'; if (!fan && (b.live.some(I => I.id === id && (performance.now() - I.t0 < 2000 || I.onEnd)) || (double && !double.onHead && layers.some(l => l.tag === 'gnome' && l.id === id)))) return; b.play(id, opt); }); }
+  if (s.screen && s.screen.at > seen.screen) { seen.screen = s.screen.at; const S = s.screen;
+    if (S.type === 'hits') gnomePlay(S.count || 1);
+    if (S.type === 'double') { const D = double = { mult: S.mult || 2, start: performance.now(), until: performance.now() + (S.seconds || 30) * 1000 };
+      // with a battle target the gnome hits HIS head for the whole double; without one he hits the screen
+      const id = { 2: 'multiplier_x2', 3: 'multiplier_x3', 5: 'glove_x5' }[D.mult], onHead = D.onHead = !!(id && battle.clips[id]?.head && battle.target());
+      // the clip plays again and again while THIS double is the current one; a copy that already plays is taken over, not doubled
+      if (onHead) { layers = layers.filter(l => l.tag !== 'gnome'); const again = () => { if (double === D && performance.now() < D.until) battle.play(id, { tag: 'double', onEnd: again }); }; const running = battle.live.find(I => I.id === id); battle.stop('double', running); if (running) running.onEnd = again; else again(); }
+      else { battle.stop('double'); const again = () => { if (double === D) gnomePlay(D.mult, 0, null, again); }; if (gnomePlay(D.mult, 0, null, again)) battle.end(id); } } // one gnome only: the "special" copy of the same clip makes way
+    if (S.type === 'stop') { double = null; battle.stop('double'); layers = layers.filter(l => l.tag !== 'gnome'); }
+    if (S.type === 'wake') wake = { t0: performance.now(), stage: 'sleep' };
+    if (S.type === 'tomato') oppReady.then(() => throwTomato(S.count || 1, S.style || tomatoStyle));
+  }
+  // "stop" from the desk: the server cleared the overlay / special -> take them off
+  if (!s.overlay) layers = layers.filter(l => l.tag !== 'overlay');
+  if (!s.special && hadSpecial) battle.stop('special');
+  hadSpecial = !!s.special;
+};
+await init(); await battle.load(); tracker?.start(); frame();
+window.cleanLayer = { battle, tracker, get double() { return double; }, get layers() { return layers; } }; // for tests, and for a look from the console
+setTimeout(() => battle.avatars.warm(), 6000); // the head cutter for supporters' profile pictures, ready before the first supporter effect
+</script></body></html>

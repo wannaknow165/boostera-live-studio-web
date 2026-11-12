@@ -1,0 +1,52 @@
+{
+  "id": "void-wraith",
+  "posture": "sit",
+  "category": "full",
+  "title": "אדון הריק הסגול",
+  "summary": "קליפה שחורה וורידים סגולים זוהרים מתפשטים על הסטרימרית שהופכת לדמות קפוצ'ון אפלה, מבקעת את קיר החדר ופותחת שער ריק סגול.",
+  "duration": 10,
+  "source": "capcaro-114",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#9D00FF",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Streamer sits at desk looking at camera"
+    },
+    {
+      "t": 1,
+      "what": "Eyes glow purple, black cracked crust spreads across face"
+    },
+    {
+      "t": 3,
+      "what": "Crust and purple veins spread down neck and chest with glowing core"
+    },
+    {
+      "t": 5,
+      "what": "Dark tattered hood and armor form over head and torso, vortex behind"
+    },
+    {
+      "t": 7,
+      "what": "Bright purple energy flash transitions to full standing hooded wraith in cracked room"
+    },
+    {
+      "t": 11,
+      "what": "Wall shatters into floating rocks revealing a giant purple lightning portal"
+    },
+    {
+      "t": 17,
+      "what": "Wraith turns back toward camera with glowing eyes and chest core before portal"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and suddenly their eyes ignite with bright purple light as a black cracked obsidian crust spreads from around the eyes across the entire face. Keep the person recognizable until the dark crust and hood cover the face. Glowing purple veins and a bright purple energy core form on their chest while their clothes morph into spiky black armor and a tattered dark hood. A blinding purple flash erupts, revealing the person standing as a full-body hooded dark wraith inside the room, now cracked and crumbling. The back wall shatters outward into floating boulders, unveiling a massive swirling purple lightning portal in a dark void. The hooded figure faces the portal, then turns back toward the camera with glowing purple eyes and chest core. Dramatic dark fantasy lighting with intense purple neon glow, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

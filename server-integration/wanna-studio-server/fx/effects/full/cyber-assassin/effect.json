@@ -1,0 +1,48 @@
+{
+  "id": "cyber-assassin",
+  "posture": "sit",
+  "category": "full",
+  "title": "מתנקשת סייבר סגולה",
+  "summary": "הסטרימרית מציתת אנרגיה סגולה בידה והופכת למתנקשת סייבר משוריינת עם גלימה ועיניים זוהרות שקמה ומזנקת אל המצלמה.",
+  "duration": 10,
+  "source": "capcaro-139",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#A855F7",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Streamer sits at desk, snaps fingers creating a purple spark"
+    },
+    {
+      "t": 1,
+      "what": "Purple lightning shoots from hand, dark metallic mask covers lower face, armored glove appears"
+    },
+    {
+      "t": 2,
+      "what": "Dark hood, full face mask with glowing purple eyes, and shoulder armor materialize"
+    },
+    {
+      "t": 4,
+      "what": "She stands up in full black/silver cyber armor and cape on a glowing purple floor grid"
+    },
+    {
+      "t": 6,
+      "what": "Turns to face camera, rooms turns into a high-tech purple command center, reaches hand forward"
+    },
+    {
+      "t": 10,
+      "what": "Dashes forward into the camera in a burst of purple lightning"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and snaps their fingers, sparking bright purple energy. Keep the person recognizable until the mask and hood cover the face. Purple lightning shoots from their hand as a black metallic mask covers their lower face and a dark hood, glowing purple eyes, and silver shoulder armor materialize. They stand up, fully transforming into a sleek cyber-assassin in black and silver tactical armor with a flowing dark cape, standing on a glowing purple floor grid as the room becomes a futuristic purple neon command center. They reach toward the camera with a glowing hand, then dash explosively into the lens in a flash of purple lightning. Cinematic purple neon lighting, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

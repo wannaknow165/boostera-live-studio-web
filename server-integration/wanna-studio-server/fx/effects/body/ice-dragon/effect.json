@@ -1,0 +1,40 @@
+{
+  "id": "ice-dragon",
+  "posture": "sit",
+  "category": "body",
+  "title": "מלכת דרקון הקרח",
+  "summary": "הסטרימרית קמה, מזמנת דרקון קרח לבן ענק מאחוריה, מתכסה בשריון קשקשי כסף ויורה אנרגיה כחולה בזמן שהדרקון נושף קרח.",
+  "duration": 10,
+  "source": "capcaro-092",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#0088FF",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Eyes glow bright blue while sitting, then she stands up and steps back."
+    },
+    {
+      "t": 2,
+      "what": "Swings arm creating a blue energy trail and a frost puddle on the floor."
+    },
+    {
+      "t": 4,
+      "what": "Giant white ice dragon appears behind her; silver scales and blue frost spread over her clothes."
+    },
+    {
+      "t": 7,
+      "what": "Reaches hand forward with glowing blue energy as the dragon leans in and breathes a blast of blue ice."
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and their eyes suddenly glow bright ice-blue. Keep the person recognizable throughout. They stand up from their chair, step back, and sweep their arm in an arc, leaving a glowing blue energy trail while a white frost puddle spreads under their feet. A massive white spiky ice dragon with glowing blue eyes materializes behind them as silver dragon-scale armor and glowing blue frost spread across their clothes and arms. They extend a glowing blue ice-covered hand toward the camera as the giant dragon leans forward and unleashes a bright blue blast of icy breath. Cinematic blue lighting, high contrast, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

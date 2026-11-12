@@ -1,0 +1,40 @@
+{
+  "id": "golden-phoenix",
+  "posture": "sit",
+  "category": "full",
+  "title": "עוף החול המוזהב",
+  "summary": "היוצרת מפתחת עיניים כתומות זוהרות וסדקי אש, מצמיחה כנפיים לבנות, הופכת לעוף חול מוזהב וממריאה לעולם פנטזיה קוסמי.",
+  "duration": 10,
+  "source": "capcaro-184",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#FF7700",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Eyes glow bright orange as fiery cracks spread across face and neck."
+    },
+    {
+      "t": 3,
+      "what": "Camera pulls back; lightning crackles above, body glows orange, and large white wings sprout."
+    },
+    {
+      "t": 5,
+      "what": "Wings wrap around her and transform her into a giant white and gold phoenix emitting a beam of light."
+    },
+    {
+      "t": 8,
+      "what": "Phoenix flies forward in an orange burst, transitioning into a cosmic neon realm with floating platforms and giant fiery eyes."
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and their eyes suddenly ignite with a bright orange glow. Fiery golden cracks spread across their face, neck, and torso as the camera smoothly pulls back, keeping the person recognizable until the transformation covers them. Orange lightning crackles across the ceiling while massive, glowing white feathered wings sprout from their back. The wings fold inward, enveloping the person and morphing them into a majestic white and gold phoenix that shoots a vertical beam of fiery light upward. The phoenix then bursts forward in a flash of orange flames, flying into a cosmic fantasy realm filled with neon floating platforms, giant fiery eyes in the sky, and elemental blue and red phoenixes. Cinematic fiery and neon lighting, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

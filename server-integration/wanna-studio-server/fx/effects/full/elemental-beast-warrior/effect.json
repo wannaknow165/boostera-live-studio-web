@@ -1,0 +1,56 @@
+{
+  "id": "elemental-beast-warrior",
+  "posture": "sit",
+  "category": "full",
+  "title": "לוחמת חיות הקסם",
+  "summary": "הסטרימרית מתמזגת עם שריון קרח ואש, הופכת לנשר סגול, אריה אש ונחש קרח, ולבסוף שועטת קדימה כלוחמת מכונפת לצד שלוש החיות.",
+  "duration": 10,
+  "source": "capcaro-084",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#9B30FF",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Two floating purple witch hats and blue energy rings appear around the seated streamer"
+    },
+    {
+      "t": 2,
+      "what": "Extreme close-up on face as eyes glow bright blue and pink-purple with energy beams"
+    },
+    {
+      "t": 3,
+      "what": "Stands up with blue ice claws on right arm and orange fire claws on left arm, split half-ice half-fire scaly armor forms with giant dark purple-edged wings"
+    },
+    {
+      "t": 5,
+      "what": "Transforms into a giant purple glowing eagle flying toward the camera"
+    },
+    {
+      "t": 6,
+      "what": "Eagle flies left as a fiery orange lion charges across the floor and runs into the background"
+    },
+    {
+      "t": 9,
+      "what": "Lion morphs into a glowing blue ice cobra rearing up in the center of the hall"
+    },
+    {
+      "t": 11,
+      "what": "Cobra explodes in purple smoke as the winged armored warrior charges forward toward the camera"
+    },
+    {
+      "t": 14,
+      "what": "Final pose reaching with a giant claw surrounded by the purple eagle, fire lion, and blue cobra"
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and two floating purple witch hats with blue energy rings spin around them. The camera zooms into their face as their eyes ignite—one bright blue, one glowing purple-pink—keeping the person recognizable. They stand up as their body transforms into a split half-blue-ice, half-orange-fire scaly armor with monstrous claws and giant dark wings rimmed with purple and orange light. They morph into a giant glowing purple eagle screeching toward the camera, which gives way to a blazing orange fire lion running deep into the futuristic neon hall, then transforming into a giant glowing blue ice cobra. In a flash of purple smoke, the person reappears in dark winged armor with glowing purple and fire accents, sprinting toward the camera and reaching out with a giant claw as the purple eagle, fire lion, and blue cobra manifest behind them. Cinematic neon fantasy lighting, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

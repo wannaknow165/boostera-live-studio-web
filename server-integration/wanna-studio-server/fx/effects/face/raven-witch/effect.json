@@ -1,0 +1,117 @@
+{
+  "id": "raven-witch",
+  "posture": "sit",
+  "title": "עורב מכשפה",
+  "reference": "reference.mp4",
+  "duration": 10.5,
+  "requires": [
+    "frontal",
+    "face",
+    "eyes",
+    "shoulders",
+    "body"
+  ],
+  "assets": [
+    {
+      "id": "hat",
+      "type": "image",
+      "file": "hat.png",
+      "aspect": "1:1",
+      "refs": [
+        "ref_3.2.jpg"
+      ],
+      "prompt": "A single purple velvet witch hat exactly like the one in the reference image: tall crooked cone with a soft fold, wide brim with gold trim, a round gold medallion on the front with a white eagle emblem and small purple gems. Front view, slightly from below, centered, the whole hat visible, photorealistic, magical purple glow on the edges."
+    },
+    {
+      "id": "feathers",
+      "type": "image",
+      "file": "feathers.png",
+      "aspect": "1:1",
+      "key": false,
+      "refs": [
+        "ref_4.4.jpg"
+      ],
+      "prompt": "Seamless tileable texture of overlapping glossy black raven feathers like the feather cloak in the reference image, scales pattern pointing downward, subtle purple and blue rim light on feather edges, filling the whole square frame edge to edge, no background visible."
+    },
+    {
+      "id": "raven",
+      "type": "clip",
+      "file": "raven.webm",
+      "duration": 5,
+      "refs": [
+        "ref_7.5.jpg",
+        "ref_9.2.jpg"
+      ],
+      "keyframe": "A large black raven with spread wings and glowing purple feather tips, wearing the small purple witch hat, seen from the front, flying toward the camera, centered in the lower half of a vertical frame, whole bird visible, same style as the references.",
+      "motion": "The raven beats its huge wings powerfully, purple magic sparks trail from its feathers, it rises and flies up and away, getting smaller until it leaves the top of the frame."
+    }
+  ],
+  "timeline": [
+    {
+      "t": 0,
+      "d": 1,
+      "do": "attach",
+      "asset": "hat",
+      "anchor": "head",
+      "enter": "drop",
+      "scale": 2.3,
+      "offsetUp": 0.05,
+      "pivotY": 0.86
+    },
+    {
+      "t": 0.7,
+      "d": 0.6,
+      "do": "sparkle",
+      "anchor": "head",
+      "color": "#b46bff"
+    },
+    {
+      "t": 1,
+      "d": 0.8,
+      "do": "eyesGlow",
+      "color": "#7fb2ff",
+      "size": 0.11
+    },
+    {
+      "t": 2,
+      "d": 1.8,
+      "do": "bodyTexture",
+      "texture": "feathers",
+      "reveal": "bottomUp",
+      "opacity": 0.9,
+      "keepFace": true
+    },
+    {
+      "t": 4.2,
+      "d": 0.5,
+      "do": "flash",
+      "anchor": "body",
+      "color": "#a259ff"
+    },
+    {
+      "t": 4.4,
+      "d": 0.4,
+      "do": "vanish"
+    },
+    {
+      "t": 4.4,
+      "d": 5,
+      "do": "clip",
+      "asset": "raven",
+      "anchor": "body",
+      "scale": 1.25,
+      "freezeAnchor": true
+    },
+    {
+      "t": 9.6,
+      "d": 0.9,
+      "do": "return"
+    }
+  ],
+  "category": "face",
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and transforms with dark purple magic in one continuous shot. A purple velvet witch hat with a gold eagle medallion drops onto their head in a swirl of purple sparks, their eyes start glowing bright blue, their face darkens into shadow, and glossy black raven feathers spread over their body. In a burst of purple light they transform into a huge black raven with glowing purple-tipped wings wearing the small witch hat, which flaps its wings and flies up and away. Keep the same person recognizable until the transformation. Photorealistic, dramatic purple and blue lighting, vertical framing, static camera."
+  },
+  "returnColor": "#a259ff"
+}

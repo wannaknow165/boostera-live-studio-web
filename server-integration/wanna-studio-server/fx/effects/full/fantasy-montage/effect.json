@@ -1,0 +1,44 @@
+{
+  "id": "fantasy-montage",
+  "posture": "sit",
+  "category": "full",
+  "title": "אוסף דמויות פנטזיה",
+  "summary": "אוסף מהיר של חמש טרנספורמציות: קוסמת קרח, אנוביס, לוחם צללים, יצור קרח מכונף ודרקון קרח.",
+  "duration": 10,
+  "source": "capcaro-065",
+  "requires": [
+    "frontal",
+    "face",
+    "shoulders",
+    "body"
+  ],
+  "returnColor": "#00A8FF",
+  "phases": [
+    {
+      "t": 0,
+      "what": "Seated woman gets glowing blue left eye and icy half-face, stands up in silver-blue kimono with fur collar and glowing hand."
+    },
+    {
+      "t": 3,
+      "what": "Close-up of eyes getting jagged black makeup and gold glow, transforming into seated black-and-gold Anubis warrior."
+    },
+    {
+      "t": 7,
+      "what": "Seated streamer gets metallic bird mask with purple eyes, stands in dark hooded armor with purple runes."
+    },
+    {
+      "t": 12,
+      "what": "Eye close-up with blue lightning, standing woman gets ice hands and turns into winged crystalline ice creature."
+    },
+    {
+      "t": 17,
+      "what": "Standing woman conjures blue energy swirls, eyes glow blue, crouches into mist and transforms into roaring winged ice dragon."
+    }
+  ],
+  "remix": {
+    "seconds": 10,
+    "prompt": "The person in the image is live-streaming at home and undergoes a rapid 5-part fantasy transformation montage while keeping the person recognizable until masks or full creature forms cover the face. First, their left eye glows blue with frost, standing in a silver kimono with fur collar and icy hand mist. Second, black jagged makeup and gold eyes appear, morphing them into a black-and-gold jackal-headed Anubis warrior in a golden temple. Third, a silver bird mask with glowing purple eyes and dark hooded purple-rune armor materialize on them as they stand. Fourth, blue lightning sparks from their eye, ice covers their hands, and they become a crystalline winged ice creature with a glowing chest core in a neon studio. Finally, they spin blue energy ribbons, crouch into icy mist, and transform into a massive roaring winged ice dragon with a glowing blue maw. Cinematic fantasy lighting, vertical framing."
+  },
+  "assets": [],
+  "timeline": []
+}

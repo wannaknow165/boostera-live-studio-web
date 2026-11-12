@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WANNA Studio · גלריה</title>
+<style>
+  :root { --bg:#0b0b12; --panel:#14141f; --panel2:#1b1b29; --line:#262638; --text:#f1f1f6; --muted:#9696ad;
+    --front:#b06bff; --bg2:#3d9bff; --tpl:#8a8aa3; --live:#ff9a3d; --room:#2fd1a0; --ok:#3ddc84; --warn:#ffcc4d; --bad:#ff5a6a; }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,"Segoe UI",Arial,sans-serif }
+  a { color:inherit }
+  header { position:sticky; top:0; z-index:5; background:linear-gradient(180deg,#0b0b12 70%,#0b0b12cc); padding:16px 20px 10px; border-bottom:1px solid var(--line) }
+  .top { display:flex; align-items:center; gap:12px; flex-wrap:wrap }
+  h1 { font-size:20px; margin:0; letter-spacing:.2px } h1 b { color:var(--front) }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-inline-start:auto }
+  .chip { background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:4px 10px; color:var(--muted); font-size:12px; white-space:nowrap }
+  .chip b { color:var(--text) }
+  .btn { background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:9px; padding:7px 11px; font:inherit; cursor:pointer; white-space:nowrap; text-decoration:none; display:inline-flex; gap:6px; align-items:center }
+  .btn:hover { border-color:#3a3a55 } .btn.primary { background:linear-gradient(135deg,#5b2bb0,var(--front)); border:0; font-weight:700 }
+  .btn.sm { padding:4px 8px; font-size:12px }
+  .bar { display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap }
+  .tabs { display:flex; gap:4px; flex-wrap:wrap }
+  .tab { background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:9px; padding:6px 10px; cursor:pointer; font:inherit }
+  .tab.on { background:var(--panel2); color:var(--text); border-color:#3a3a55 }
+  .tab .n { opacity:.7; margin-inline-start:4px }
+  .people-label { color:var(--muted); font-size:12px; font-weight:700; margin-inline-end:2px }
+  .person { background:transparent; border:1px solid var(--line); color:var(--text); border-radius:999px; padding:3px 10px; cursor:pointer; font:inherit; font-size:12px; white-space:nowrap }
+  .person .n { color:var(--muted); margin-inline-start:4px } .person.on { background:#f5c84222; border-color:#f5c842; color:#f5c842 }
+  .person.r-supporter.on { background:#3ddc8422; border-color:var(--ok); color:var(--ok) } .person.r-streamer.on { background:#ff9a3d22; border-color:var(--live); color:var(--live) }
+  .people-group { display:flex; gap:5px; flex-wrap:wrap; align-items:center; padding-inline-end:10px; border-inline-end:1px solid var(--line) }
+  .people-group:last-child { border:0 }
+  input[type=search], input[type=text], select, input[type=file] { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:9px; padding:7px 10px; font:inherit }
+  main { padding:16px 20px 60px; max-width:1500px; margin:0 auto }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; margin-bottom:16px }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px }
+  .card h3 { margin:0 0 8px; font-size:14px; color:var(--muted); font-weight:600 }
+  .mono { font-family:ui-monospace,Consolas,monospace; font-size:12px; background:#0f0f18; border:1px solid var(--line); border-radius:8px; padding:6px 8px; direction:ltr; text-align:left; overflow-wrap:anywhere }
+  table { width:100%; border-collapse:separate; border-spacing:0; background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden }
+  th { text-align:start; font-weight:600; color:var(--muted); font-size:12px; padding:10px; border-bottom:1px solid var(--line); background:var(--panel2) }
+  td { padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:middle }
+  tr:last-child td { border-bottom:0 } tr:hover td { background:#17172300 }
+  .thumb { width:64px; height:114px; border-radius:8px; background:#1c1c28 center/cover no-repeat; position:relative; overflow:hidden; cursor:pointer; border:1px solid var(--line) }
+  .thumb video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover }
+  .badge { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:3px 9px; font-size:12px; font-weight:700; white-space:nowrap }
+  .k-front { background:#b06bff22; color:var(--front) } .k-background { background:#3d9bff22; color:var(--bg2) } .k-template { background:#8a8aa322; color:#c9c9dd }
+  .k-battle { background:#ff4d6d22; color:#ff6b84 }
+  .k-overlay { background:#f5c84222; color:#f5c842 }
+  .k-live { background:#ff9a3d22; color:var(--live) } .k-room { background:#2fd1a022; color:var(--room) }
+  .name { font-weight:700 } .sub { color:var(--muted); font-size:12px }
+  .empty { text-align:center; color:var(--muted); padding:40px }
+  dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:16px; padding:0; max-width:min(96vw,520px) }
+  dialog::backdrop { background:#000a }
+  .player { background: repeating-conic-gradient(#20202c 0 25%, #171722 0 50%) 0 0/24px 24px; display:flex; justify-content:center }
+  .player video, .player img { max-height:78vh; max-width:100%; display:block }
+  .dlg-bar { display:flex; gap:8px; align-items:center; padding:10px 12px; border-top:1px solid var(--line) }
+  .form { display:grid; gap:8px }
+  .form label { display:grid; gap:4px; color:var(--muted); font-size:12px }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center }
+  .toast { position:fixed; bottom:18px; inset-inline-start:18px; background:#222235; border:1px solid #3a3a55; padding:10px 14px; border-radius:12px; display:none; z-index:20 }
+  .pill-ok { color:var(--ok) } .pill-warn { color:var(--warn) } .pill-bad { color:var(--bad) }
+  @media (max-width: 760px) { th:nth-child(4), td:nth-child(4), th:nth-child(6), td:nth-child(6) { display:none } header { position:static } }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>🎬 <b>WANNA</b> Studio · <span id="title">גלריה</span></h1>
+    <div class="chips" id="chips"></div>
+    <a class="btn" href="/links">🔗 קישורים ל-Studio</a>
+    <a class="btn" href="/automations">⚔ אוטומציות קרב</a>
+    <a class="btn" href="/fx/" target="_blank">🧙 פאנל אפקטים חיים</a>
+    <button class="btn primary" id="newOrder">＋ סרטון תומך</button>
+  </div>
+  <div class="bar">
+    <div class="tabs" id="tabs"></div>
+    <input type="search" id="q" placeholder="חיפוש לפי שם…" style="margin-inline-start:auto;min-width:200px">
+  </div>
+  <div class="bar" id="peopleBar" style="margin-top:8px"></div>
+</header>
+
+<main>
+  <div class="cards">
+    <div class="card"><h3>🔌 חיבור ל-TikTok LIVE Studio</h3>
+      <div class="sub">בקובץ ה-<b>.env</b> של ה-Studio:</div>
+      <div class="mono" id="upstream"></div>
+      <div class="sub" style="margin-top:6px">ה-Studio מושך מכאן את הקטלוג (<span class="mono" style="padding:1px 5px">/api/set</span>, <span class="mono" style="padding:1px 5px">/api/overlays</span>) ומנגן את הקבצים מ-<span class="mono" style="padding:1px 5px">/media</span>.</div>
+    </div>
+    <div class="card"><h3>🧭 מה יש בגלריה</h3>
+      <div class="row" style="gap:6px;margin-bottom:4px"><span class="badge k-overlay">🥊 אוברליי</span><span class="sub">הספרייה מהפאנל הישן: גמד מתאגרף, הטורקי מרביץ לשחקן, תינוק, תרנגולת…</span></div>
+      <div class="row" style="gap:6px;margin-bottom:4px"><span class="badge k-battle">⚔ קרב</span><span class="sub">מכות, כפפות ×2/×3/×5, עגבנייה, סנייפר… על השחקן</span></div>
+      <div class="row" style="gap:6px"><span class="badge k-front">🟣 פרונט</span><span class="sub">מתנה שקופה מעל המשדרת (WebM שקוף)</span></div>
+      <div class="row" style="gap:6px;margin-top:4px"><span class="badge k-background">🔵 רקע</span><span class="sub">סרטון מלא שמחליף את המסך</span></div>
+      <div class="row" style="gap:6px;margin-top:4px"><span class="badge k-template">📋 תבנית</span><span class="sub">סרטון בסיס שהתומך נכנס אליו</span></div>
+      <div class="row" style="gap:6px;margin-top:4px"><span class="badge k-live">🟠 אפקט חי</span><span class="sub">המשדרת עצמה משתנה (רמיקס)</span></div>
+    </div>
+    <div class="card" id="queueCard" style="display:none"><h3>⏳ בתור לייצור</h3><div id="queue" class="form"></div></div>
+  </div>
+
+  <table>
+    <thead><tr><th style="width:80px">תצוגה</th><th>שם</th><th>סוג</th><th>פרטים</th><th>משך</th><th>מזהה ל-Studio</th><th style="width:1%">פעולות</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="7" class="empty">טוען…</td></tr></tbody>
+  </table>
+</main>
+
+<dialog id="dlgPlay"><div class="player" id="player"></div><div class="dlg-bar"><b id="playName" style="flex:1"></b><a class="btn sm" id="playOpen" target="_blank">פתח קובץ</a><button class="btn sm" onclick="dlgPlay.close()">סגור</button></div></dialog>
+
+<dialog id="dlgOrder"><form method="dialog" class="card form" id="orderForm" style="border:0">
+  <h3 style="color:var(--text);font-size:16px">＋ סרטון תומך חדש</h3>
+  <label>תבנית<select id="oTpl" required></select></label>
+  <label>תמונת התומך<input type="file" id="oPhoto" accept="image/*" required></label>
+  <label>שם התומך<input type="text" id="oName" placeholder="לא חובה"></label>
+  <div class="row">
+    <label style="flex:1">מצב<select id="oMode"><option value="replace">מחליף את הדמות</option><option value="add">מצטרף לדמות</option></select></label>
+    <label style="flex:1">שכבה<select id="oLayer"><option value="front">🟣 פרונט (שקוף)</option><option value="background">🔵 רקע (מלא)</option></select></label>
+  </div>
+  <label id="tokWrap" style="display:none">API token<input type="text" id="oTok" dir="ltr"></label>
+  <div class="sub">נוצר ב-Kling 4.0 (בערך 20–30 יחידות לסרטון). מופיע כאן כשמוכן.</div>
+  <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>ביטול</button><button class="btn primary" id="oGo" value="go">צור</button></div>
+</form></dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const KIND = { overlay: ['🥊 אוברליי', 'k-overlay'], battle: ['⚔ קרב', 'k-battle'], front: ['🟣 פרונט', 'k-front'], background: ['🔵 רקע', 'k-background'], template: ['📋 תבנית', 'k-template'], live: ['🟠 אפקט חי', 'k-live'], room: ['🖼 חדר', 'k-room'] };
+const TABS = [['all', 'הכל'], ['overlay', '🥊 אוברליי (פאנל ישן)'], ['battle', '⚔ קרב'], ['front', '🟣 פרונט'], ['background', '🔵 רקע'], ['template', '📋 תבניות'], ['live', '🟠 אפקטים חיים'], ['room', '🖼 חדרים']];
+let rows = [], tab = 'all', person = null; // person = { name, role } filter
+const ROLES = { player: '🎮 שחקנים / יוצרי תוכן', supporter: '💛 תומכים', streamer: '🎙 משדרות' };
+function renderPeople() {
+  // every person who has items, grouped by role, with how many items each has
+  const map = {};
+  for (const r of rows) for (const p of r.people || []) { const k = p.role + '|' + p.name; (map[k] ||= { ...p, n: 0 }).n++; }
+  const groups = Object.keys(ROLES).map(role => [role, Object.values(map).filter(p => p.role === role).sort((a, b) => b.n - a.n)]).filter(([, l]) => l.length);
+  $('#peopleBar').innerHTML = groups.map(([role, list]) => `<div class="people-group"><span class="people-label">${ROLES[role]}</span>${list.map(p =>
+    `<button class="person r-${role} ${person && person.name === p.name && person.role === role ? 'on' : ''}" data-p="${encodeURIComponent(p.name)}" data-r="${role}" dir="auto">${role === 'player' ? '@' : ''}${p.name}<span class="n">${p.n}</span></button>`).join('')}</div>`).join('')
+    + (person ? `<button class="btn sm" id="clearPerson">✕ כל האנשים</button>` : '');
+  document.querySelectorAll('.person').forEach(b => b.onclick = () => { const n = decodeURIComponent(b.dataset.p); person = person && person.name === n && person.role === b.dataset.r ? null : { name: n, role: b.dataset.r }; renderPeople(); render(); });
+  $('#clearPerson') && ($('#clearPerson').onclick = () => { person = null; renderPeople(); render(); });
+}
+const toast = (m, ms = 2800) => { const t = $('#toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = 'none', ms); };
+const tok = () => { try { return localStorage.getItem('wanna-api-token') || ''; } catch { return ''; } };
+const api = (u, o = {}) => fetch(u, { ...o, headers: { ...(o.headers || {}), ...(tok() ? { 'x-api-key': tok() } : {}) } });
+const fmtDur = d => d ? `${d.toFixed ? d.toFixed(1) : d} ש׳` : '—';
+const thumbUrl = r => r.url ? `/media/_thumb?src=${encodeURIComponent(r.previewUrl || r.url)}` : '';
+$('#upstream').textContent = `BOOSTERA_UPSTREAM_URL="${location.origin}"`;
+
+async function load() {
+  const [cat, health] = await Promise.all([fetch('/api/catalog').then(r => r.json()), fetch('/health').then(r => r.json())]);
+  rows = cat.rows; $('#title').textContent = cat.title;
+  const count = k => rows.filter(r => k === 'all' || r.kind === k).length;
+  $('#tabs').innerHTML = TABS.map(([k, l]) => `<button class="tab ${k === tab ? 'on' : ''}" data-k="${k}">${l}<span class="n">${count(k)}</span></button>`).join('');
+  document.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.k; load(); });
+  $('#chips').innerHTML = [`אוברליי <b>${count('overlay')}</b>`, `קרב <b>${count('battle')}</b>`, `פרונט <b>${count('front')}</b>`, `רקע <b>${count('background')}</b>`, `תבניות <b>${count('template')}</b>`, `אפקטים חיים <b>${count('live')}</b>`,
+    health.dryRun ? '<span class="pill-warn">מצב ניסיון</span>' : '', health.queue ? `בתור <b>${health.queue}</b>` : ''].filter(Boolean).map(h => `<span class="chip">${h}</span>`).join('');
+  fetch('/api/kling/units', { headers: tok() ? { 'x-api-key': tok() } : {} }).then(r => r.ok ? r.json() : null).then(u => { if (!Array.isArray(u)) return; const left = u.reduce((s, p) => s + Number(p.remaining || 0), 0); $('#chips').insertAdjacentHTML('beforeend', `<span class="chip">Kling <b class="${left < 30 ? 'pill-bad' : 'pill-ok'}">${left.toFixed(1)}</b> יח׳</span>`); }).catch(() => {});
+  renderPeople(); render(); queue();
+}
+
+function render() {
+  const q = $('#q').value.trim().toLowerCase();
+  const list = rows.filter(r => (tab === 'all' || r.kind === tab) && (!q || (r.name || '').toLowerCase().includes(q) || (r.people || []).some(p => p.name.toLowerCase().includes(q)))
+    && (!person || (r.people || []).some(p => p.name === person.name && p.role === person.role)));
+  if (!list.length) { $('#rows').innerHTML = `<tr><td colspan="7" class="empty">אין פריטים בקטגוריה הזאת</td></tr>`; return; }
+  $('#rows').innerHTML = list.map((r, i) => {
+    const [kl, kc] = KIND[r.kind] || [r.kind, ''];
+    let details = '';
+    if (r.kind === 'front') details = `WebM שקוף · ${r.mode === 'add' ? 'מצטרף' : 'מחליף'}`;
+    if (r.kind === 'background') details = `MP4 מלא · ${r.mode === 'add' ? 'מצטרף' : 'מחליף'}`;
+    if (r.kind === 'template') details = `${(r.modes || []).map(m => m === 'add' ? 'מצטרף' : 'מחליף').join(' / ')} · ברירת מחדל: ${r.layer === 'background' ? 'רקע' : 'פרונט'}`;
+    if (r.kind === 'live') details = `${r.posture === 'stand' ? '🧍 עמידה' : '🪑 ישיבה'} · ${r.hasRemix ? 'רמיקס' : ''}${r.hasLayer ? ' + שכבה' : ''} · <b>${r.remixes.length}</b> משדרות מוכנות${r.summary ? `<div class="sub">${r.summary}</div>` : ''}`;
+    if (r.kind === 'room') details = 'רקע לחדר (תמונה)';
+    if (r.kind === 'overlay') details = `WebM שקוף · ${r.character ? '🧍 דמות בסיס' : r.user ? `🎯 לשחקן <b dir="ltr">@${r.user}</b>` : 'קליפ'}${r.boxer ? ` · נבנה מ-${r.boxer}` : ''}${r.hitAt != null ? ` · מכה ב-${r.hitAt} ש׳` : ''}`;
+    if (r.kind === 'battle') details = `WebM שקוף · ${r.perPlayer ? '🎯 לכל שחקן (הפנים שלו נכנסות לקליפ)' : 'מסך'}${r.hits ? ` · ${r.hits} מכות מסונכרנות` : ''}`;
+    const sid = r.studioId || (r.kind === 'room' ? `bg_${r.id}` : r.kind === 'live' && r.remixes.length ? r.remixes.map(m => `srv_clip_remix-${r.id.slice(5)}-${decodeURIComponent(m.streamer)}`).join('<br>') : '');
+    const acts = [`<button class="btn sm" data-play="${i}">▶ צפייה</button>`,
+      r.url ? `<button class="btn sm" data-copy="${i}">🔗 קישור</button>` : '',
+      r.kind === 'front' || r.kind === 'battle' || r.kind === 'overlay' ? `<button class="btn sm" data-send="${i}">🎬 שגר</button>` : '',
+      r.kind === 'background' ? `<button class="btn sm" data-send="${i}">🎬 שגר</button>` : '',
+      r.kind === 'live' ? `<a class="btn sm" href="/fx/" target="_blank">🧙 פאנל</a>` : '',
+      r.kind === 'template' ? `<button class="btn sm" data-order="${r.templateId}">＋ תומך</button>` : ''].join(' ');
+    return `<tr><td><div class="thumb" data-hover="${i}" style="background-image:url('${thumbUrl(r)}')"></div></td>
+      <td><div class="name">${r.name || r.id}</div><div class="sub" dir="ltr" style="text-align:right">${r.id}</div></td>
+      <td><span class="badge ${kc}">${kl}</span></td><td>${details}</td><td>${fmtDur(r.duration)}</td>
+      <td>${sid ? `<span class="mono" style="padding:2px 6px">${sid}</span>` : '<span class="sub">—</span>'}</td><td><div class="row" style="flex-wrap:nowrap">${acts}</div></td></tr>`;
+  }).join('');
+  const L = list;
+  document.querySelectorAll('[data-play]').forEach(b => b.onclick = () => play(L[b.dataset.play]));
+  document.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => { navigator.clipboard.writeText(location.origin + L[b.dataset.copy].url); toast('הקישור הועתק'); });
+  document.querySelectorAll('[data-send]').forEach(b => b.onclick = () => send(L[b.dataset.send]));
+  document.querySelectorAll('[data-order]').forEach(b => b.onclick = () => openOrder(b.dataset.order));
+  document.querySelectorAll('[data-hover]').forEach(el => {
+    const r = L[el.dataset.hover]; if (!r.url || r.kind === 'room') return;
+    el.onmouseenter = () => { const v = document.createElement('video'); v.src = r.kind === 'live' && r.remixes[0] ? r.remixes[0].url : r.url; v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true; el.append(v); };
+    el.onmouseleave = () => el.querySelector('video')?.remove();
+    el.onclick = () => play(r);
+  });
+}
+
+function play(r) {
+  const p = $('#player'); p.innerHTML = '';
+  if (r.kind === 'live' && r.remixes.length) {
+    p.innerHTML = `<div style="padding:10px;display:grid;gap:8px;width:100%">${r.remixes.map(m => `<div><div class="sub">משדרת: <b>${decodeURIComponent(m.streamer)}</b></div><video src="${m.url}" controls playsinline style="width:100%;max-height:60vh"></video></div>`).join('')}${r.url && !r.url.includes('/remix/') ? `<div><div class="sub">הסרטון המקורי (השראה)</div><video src="${r.url}" controls playsinline style="width:100%;max-height:40vh"></video></div>` : ''}</div>`;
+  } else if (r.kind === 'room') p.innerHTML = `<img src="${r.url}">`;
+  else p.innerHTML = `<video src="${r.url}" controls autoplay playsinline loop></video>`;
+  $('#playName').textContent = r.name; $('#playOpen').href = r.url || '#'; dlgPlay.showModal();
+}
+dlgPlay.addEventListener('close', () => $('#player').innerHTML = '');
+
+async function send(r) {
+  const path = r.kind === 'front' || r.kind === 'battle' || r.kind === 'overlay' ? '/api/overlay/play' : '/api/clip/play';
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.orderId || r.battleId || r.overlayId }) });
+  toast(res.ok ? `נשלח ל-Studio: ${r.name}` : 'השליחה נכשלה');
+}
+
+async function openOrder(tid) {
+  const g = await api('/api/gallery'); if (g.status === 401) { $('#tokWrap').style.display = ''; }
+  const tpls = g.ok ? (await g.json()).templates : rows.filter(r => r.kind === 'template').map(r => ({ id: r.templateId, title: r.name, layer: r.layer }));
+  $('#oTpl').innerHTML = tpls.map(t => `<option value="${t.id}" ${t.id === tid ? 'selected' : ''}>${t.title}</option>`).join('');
+  dlgOrder.showModal();
+}
+$('#newOrder').onclick = () => openOrder();
+$('#orderForm').onsubmit = async e => {
+  if (e.submitter?.value !== 'go') return;
+  e.preventDefault();
+  if ($('#oTok').value) try { localStorage.setItem('wanna-api-token', $('#oTok').value); } catch {}
+  const f = $('#oPhoto').files[0]; if (!f) return toast('צריך תמונה');
+  $('#oGo').disabled = true;
+  try {
+    const a = await (await api(`/api/avatars?name=${encodeURIComponent($('#oName').value)}`, { method: 'POST', headers: { 'Content-Type': f.type }, body: f })).json();
+    const o = await (await api('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ templateId: $('#oTpl').value, avatarId: a.id, mode: $('#oMode').value, layer: $('#oLayer').value, supporterName: $('#oName').value }) })).json();
+    if (o.error) throw new Error(o.error);
+    dlgOrder.close(); toast('נוצרה הזמנה, הסרטון בייצור'); load();
+  } catch (err) { toast('שגיאה: ' + err.message, 5000); } finally { $('#oGo').disabled = false; }
+};
+
+async function queue() {
+  const r = await api('/api/orders'); if (!r.ok) return;
+  const list = (await r.json()).filter(o => o.status === 'queued' || o.status === 'processing' || (o.status === 'failed' && Date.now() - Date.parse(o.created) < 864e5));
+  $('#queueCard').style.display = list.length ? '' : 'none';
+  $('#queue').innerHTML = list.map(o => `<div class="row"><span class="badge ${o.layer === 'front' ? 'k-front' : 'k-background'}">${o.layer === 'front' ? 'פרונט' : 'רקע'}</span><b>${o.supporterName || 'תומך'}</b><span class="sub">${o.templateId}</span><span class="${o.status === 'failed' ? 'pill-bad' : 'pill-warn'}" style="margin-inline-start:auto">${o.status === 'failed' ? 'נכשל: ' + (o.error || '').slice(0, 60) : o.status === 'processing' ? 'בייצור… ' + (o.klingStatus || '') : 'ממתין'}</span></div>`).join('');
+}
+$('#q').oninput = render;
+load(); setInterval(() => { load(); }, 15000);
+</script>
+</body>
+</html>

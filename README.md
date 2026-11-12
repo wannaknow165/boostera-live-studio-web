@@ -40,7 +40,7 @@ node start-mobile.mjs
 
 Copy example configuration only during initial setup; retain existing local configuration on subsequent updates. The launcher starts the existing effects server and opens the mobile app. The example uses dry-run generation; provider features require local credentials and intentional configuration. The application is a PWA, not an Android APK. Access from another phone requires a reachable HTTPS origin and local pairing.
 
-The mobile app includes camera/microphone capture, tracked overlays, customers, recipes, automation rules, recording, a processed stream viewer and optional provider-backed video jobs. Public TikTok event reception uses `tiktok-live-connector`. Account invitations and battle-start operations are explicitly unavailable in the mobile app. RTMP output does not establish battle control.
+The mobile app includes camera/microphone capture, tracked overlays, customers, recipes, automation rules, recording, a processed stream viewer and optional provider-backed video jobs. Public TikTok event reception uses `tiktok-live-connector`. Creating a TikTok LIVE room, account invitations and battle-start operations are unavailable in the mobile app. Local RTMP video/audio works without LIVE Studio when an active destination is supplied; encoder output does not establish public TikTok visibility or battle control. See the [standalone audit](docs/STANDALONE-AUDIT.md).
 
 ## Source and media
 
@@ -62,7 +62,7 @@ cd server-integration/wanna-studio-server
 node --experimental-test-module-mocks --test test/phone-gate.test.mjs
 ```
 
-These tests do not prove a real TikTok broadcast, successful delivery of a Co-host invitation, real battle control, or mobile-device performance. Browser test scripts use synthetic camera inputs and require the locally running app plus Python Playwright.
+These tests do not prove a real TikTok broadcast, successful delivery of a Co-host invitation, real battle control, or mobile-device performance. Run `npm.cmd run test:browser` in the mobile server directory for disposable local servers and synthetic-camera browser flows; Python Playwright and Chromium are required. The runner does not touch the existing running app or customer data.
 
 ## Documentation
 

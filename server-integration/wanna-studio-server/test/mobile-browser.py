@@ -1,3 +1,5 @@
+import os
+BASE=os.environ.get("WANNA_TEST_URL", "http://127.0.0.1:18881").rstrip("/")
 import json, time, pathlib
 from playwright.sync_api import sync_playwright
 ROOT=pathlib.Path(__file__).resolve().parents[1]
@@ -17,7 +19,7 @@ with sync_playwright() as p:
     page.on('pageerror',lambda e: result['pageErrors'].append(str(e)))
     page.on('requestfailed',lambda r: result['requestFailures'].append({'url':r.url.split('?')[0],'error':r.failure}))
     try:
-        page.goto('http://127.0.0.1:8801/mobile/',wait_until='domcontentloaded')
+        page.goto(BASE+'/mobile/',wait_until='domcontentloaded')
         wait_script(page, "document.querySelectorAll('#effects-list .effect').length>0")
         assert int(page.locator('#media-count').inner_text())>0
         assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
@@ -49,7 +51,7 @@ with sync_playwright() as p:
         mark('canvas recording produced nonempty media with audio; microphone mute toggles')
         wait_script(page, "document.querySelector('#tracking-state').textContent.includes('מעקב פנים וגוף פעיל')",timeout=90000)
         mark('original face/body engine initialized in Chromium')
-        battle=page.request.get('http://127.0.0.1:8801/api/battle').json()
+        battle=page.request.get(BASE+'/api/battle').json()
         assert any(c['id']=='multiplier_x2' for c in battle['clips'])
         mark('existing glove video catalog is available')
         page.locator('[data-tab=effects]').click()

@@ -1,3 +1,5 @@
+import os
+BASE=os.environ.get("WANNA_TEST_URL", "http://127.0.0.1:18881").rstrip("/")
 import json,time,pathlib
 from playwright.sync_api import sync_playwright
 ROOT=pathlib.Path(__file__).resolve().parents[1]
@@ -15,9 +17,9 @@ with sync_playwright() as p:
  def page():
   tab=context.new_page();tab.on('pageerror',lambda e:result['pageErrors'].append(str(e)));return tab
  manager=page()
- def api(route,method='GET',data=None):return context.request.fetch('http://127.0.0.1:8801/api/workspace/'+route,method=method,**({'data':data} if data is not None else {}))
+ def api(route,method='GET',data=None):return context.request.fetch(BASE+'/api/workspace/'+route,method=method,**({'data':data} if data is not None else {}))
  try:
-  manager.goto('http://127.0.0.1:8801/mobile/manage',wait_until='domcontentloaded')
+  manager.goto(BASE+'/mobile/manage',wait_until='domcontentloaded')
   wait(manager,lambda:manager.locator('#connection').inner_text()=='מחובר לשרת')
   assert manager.evaluate('document.documentElement.scrollWidth<=innerWidth')
   manager.locator('#client-name').fill('__WANNA_QA__')
@@ -40,22 +42,27 @@ with sync_playwright() as p:
   manager.locator('[data-view=automations]').click()
   wait(manager,lambda:manager.locator('#rules-list .rule-row').count()>0)
   mark('original automation rules loaded in mobile manager')
-  camera=page();camera.goto('http://127.0.0.1:8801/mobile/',wait_until='domcontentloaded');camera.locator('#start-camera-main').click()
+  camera=page();camera.goto(BASE+'/mobile/',wait_until='domcontentloaded');camera.locator('#start-camera-main').click()
   wait(camera,lambda:camera.evaluate("document.querySelector('#camera').readyState>=2 && document.querySelector('#camera-placeholder').hidden"))
   wait(camera,lambda:'מעקב פנים וגוף פעיל' in camera.locator('#tracking-state').inner_text(),90000)
   wait(camera,lambda:camera.locator('#personal-effects').inner_text().find('__QA_OVERLAY__')>=0)
   camera.locator('#personal-effects button').filter(has_text='__QA_OVERLAY__').click()
   wait(camera,lambda:camera.locator('#toast').inner_text().find('האישי פועל')>=0)
   mark('saved customer overlay reached live camera compositor')
+  camera.locator('#send-rtmp').click()
+  wait(camera,lambda:'הגדר יעד RTMP' in camera.locator('#toast').inner_text())
+  assert not api('overview').json()['broadcasts']
+  mark('missing RTMP destination fails clearly without an orphan broadcast')
   camera.locator('#send-server').click()
   wait(camera,lambda:any(s['state']=='running' and s['mode']=='preview' for s in api('overview').json()['broadcasts']))
   stream=next(s for s in reversed(api('overview').json()['broadcasts']) if s['state']=='running' and s['mode']=='preview');stream_id=stream['id']
-  wait(camera,lambda:context.request.get('http://127.0.0.1:8801'+stream['playback']).status==200,60000)
-  playlist=context.request.get('http://127.0.0.1:8801'+stream['playback']).text()
+  assert stream['outputConfirmed'] and stream['outputFrames']>0
+  wait(camera,lambda:context.request.get(BASE+stream['playback']).status==200,60000)
+  playlist=context.request.get(BASE+stream['playback']).text()
   assert '#EXTINF:' in playlist
-  assert context.request.get('http://127.0.0.1:8801/api/workspace/broadcast/'+stream_id+'/files/init.mp4').status==200
+  assert context.request.get(BASE+'/api/workspace/broadcast/'+stream_id+'/files/init.mp4').status==200
   mark('continuous composed camera and audio reached FFmpeg and live HLS before stopping')
-  viewer=page();viewer.goto('http://127.0.0.1:8801/mobile/viewer',wait_until='domcontentloaded')
+  viewer=page();viewer.goto(BASE+'/mobile/viewer',wait_until='domcontentloaded')
   wait(viewer,lambda:viewer.locator('#stream option').count()>0)
   viewer.locator('#stream').select_option(stream_id);viewer.locator('#load-stream').click()
   wait(viewer,lambda:viewer.evaluate("document.querySelector('#server-video').readyState>=2"),45000)
@@ -64,6 +71,7 @@ with sync_playwright() as p:
   camera.locator('#send-server').click()
   wait(camera,lambda:not camera.locator('#send-server').evaluate("e=>e.classList.contains('broadcast-on')"))
   camera.locator('#camera-toggle').click()
+  wait(camera,lambda:all(s['state'] in ['stopped','failed'] for s in api('overview').json()['broadcasts']))
   mark('camera and continuous upload stop cleanly')
   assert not result['pageErrors'],result['pageErrors']
  except Exception as e:

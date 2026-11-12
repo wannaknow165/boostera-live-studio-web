@@ -2,7 +2,7 @@ const el=id=>document.getElementById(id);
 async function api(route,method='GET',data){const response=await fetch('/api/workspace/'+route,{method,cache:'no-store',...(data!==undefined?{headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}:{})});const value=await response.json();if(!response.ok)throw Error(value.error||'SERVER_ERROR');return value;}
 const cover=(source,ctx,w,h)=>{const sw=source.videoWidth||source.naturalWidth||source.width,sh=source.videoHeight||source.naturalHeight||source.height;if(!sw||!sh)return;const k=Math.max(w/sw,h/sh);ctx.drawImage(source,(w-sw*k)/2,(h-sh*k)/2,sw*k,sh*k);};
 export function createMobileWorkspace({getEngine,initEngine,getCamera,getMic,createStream,output,video,getFacing,toast}){
-  let authenticated=false,state={clients:[],recipes:[]},recipe=null,media=null,startedAt=0,client=null,avatar=null,lastCommand=0,picking=false,broadcast=null,broadcastRecorder=null,broadcastStream=null,uploadQueue=Promise.resolve(),pending=0,sequence=0,failed=false;
+  let authenticated=false,state={clients:[],recipes:[]},recipe=null,media=null,startedAt=0,client=null,avatar=null,lastCommand=0,picking=false,broadcast=null,broadcastRecorder=null,broadcastStream=null,uploadQueue=Promise.resolve(),pending=0,sequence=0,failed=false,broadcastStarting=false;
   const cutout=document.createElement('canvas');cutout.width=320;cutout.height=380;const cut=cutout.getContext('2d');
   function provider(){return{hold:()=>()=>{},head:()=>{
     const engine=getEngine();let source=el('head-source').value==='avatar'?avatar:null;
@@ -14,7 +14,7 @@ export function createMobileWorkspace({getEngine,initEngine,getCamera,getMic,cre
   function attach(engine){if(engine?.battle)engine.battle.opp=provider();}
   async function refresh(){
     if(!authenticated||document.hidden)return;
-    try{state=await api('overview');const selected=el('active-client').value;el('active-client').replaceChildren(new Option('כל הלקוחות',''));for(const c of state.clients)el('active-client').add(new Option(c.name,c.id));el('active-client').value=selected;renderRecipes();el('server-stream-state').textContent=state.config.mediaTools?'שידור לשרת זמין · '+(state.config.rtmpConfigured?'יעד RTMP שמור':'אפשר לשמור יעד RTMP בניהול השרת'):'כלי הווידאו בשרת אינם זמינים.';}catch{}
+    try{state=await api('overview');const selected=el('active-client').value;el('active-client').replaceChildren(new Option('כל הלקוחות',''));for(const c of state.clients)el('active-client').add(new Option(c.name,c.id));el('active-client').value=selected;renderRecipes();if(!broadcast&&!failed)el('server-stream-state').textContent=state.config.mediaTools?'שידור לשרת זמין · '+(state.config.rtmpConfigured?'יעד RTMP שמור · עלייה ל־TikTok טרם אומתה':'חסר יעד RTMP לשידור חיצוני'):'כלי הווידאו בשרת אינם זמינים.';}catch{}
   }
   function renderRecipes(){const selected=el('active-client').value;el('personal-effects').replaceChildren();for(const r of state.recipes.filter(r=>!selected||!r.clientId||r.clientId===selected)){const b=document.createElement('button');b.textContent=r.title;b.onclick=()=>play(r);el('personal-effects').append(b);}if(!el('personal-effects').childNodes.length)el('personal-effects').textContent='הוסף אפקט אישי דרך ״לקוחות ויצירה״.';}
   async function setClient(){client=state.clients.find(c=>c.id===el('active-client').value)||null;avatar=null;if(client?.avatarUrl){const im=new Image();im.src=client.avatarUrl;try{await im.decode();avatar=im;}catch{}}renderRecipes();}
@@ -57,22 +57,33 @@ export function createMobileWorkspace({getEngine,initEngine,getCamera,getMic,cre
   el('capture-room').onclick=async()=>{if(getCamera()){const e=await initEngine();e.capturePlate();toast('הרקע נקלט.');}else toast('הפעל קודם מצלמה.');};
   el('room-file').onchange=async()=>{const f=el('room-file').files[0];if(!f||!getCamera())return;const e=await initEngine(),url=URL.createObjectURL(f);e._plateIsVideo=f.type.startsWith('video');try{await e.plateFromUrl(url);toast('הרקע נטען.');}finally{URL.revokeObjectURL(url);}};
   el('head-source').onchange=()=>{attach(getEngine());if(el('head-source').value==='avatar'&&!avatar)toast('בחר לקוח עם תמונת פנים כדי להשתמש באווטר.');};
-  function enqueue(blob){if(!blob.size||!broadcast)return;pending++;if(pending>8){failed=true;toast('החיבור איטי מדי. שידור הווידאו נעצר.');void stopBroadcast();return;}
+  function showBroadcastStatus(s){
+    if(!broadcast||broadcast.id!==s.id)return;
+    broadcast=s;
+    if(['failed','stopped','stopping'].includes(s.state)){if(broadcastRecorder?.state==='recording'){failed=true;el('server-stream-state').textContent='השידור נעצר: '+(s.error||s.state);toast('השידור נעצר בשרת. בדוק את החיבור ויעד השידור.');void stopBroadcast();}return;}
+    const output=s.outputConfirmed?(s.mode==='rtmp'?'המקודד שולח וידאו ליעד RTMP · הופעה ב־TikTok עדיין דורשת אימות':'המקודד מפיק וידאו לנגן השרת'):'ממתין לאישור יציאת וידאו מהמקודד';
+    el('server-stream-state').textContent=output+' · התקבלו '+(s.bytes/1048576).toFixed(2)+' MB';
+    el('preview-label').textContent=s.outputConfirmed?(s.mode==='rtmp'?'RTMP OUTPUT':'SERVER OUTPUT'):'CONNECTING';
+  }
+  function enqueue(blob){if(!blob.size||!broadcast)return;pending++;if(pending>8){pending--;failed=true;el('server-stream-state').textContent='החיבור איטי מדי. השידור נעצר.';toast('החיבור איטי מדי. שידור הווידאו נעצר.');void stopBroadcast();return;}
     const streamId=broadcast.id,n=sequence++;
-    uploadQueue=uploadQueue.then(async()=>{if(failed)return;for(let attempt=0;attempt<3;attempt++){try{const r=await fetch('/api/workspace/broadcast/'+streamId+'/chunk',{method:'POST',headers:{'Content-Type':blob.type||'application/octet-stream','x-sequence':String(n)},body:blob,signal:AbortSignal.timeout(20000)});const ack=await r.json();if(!r.ok)throw Error(ack.error);el('server-stream-state').textContent='השרת קיבל '+(ack.bytes/1048576).toFixed(2)+' MB · '+ack.sequence+' מקטעים';return;}catch(e){if(attempt===2)throw e;}}}).catch(()=>{failed=true;toast('השרת לא אישר את מקטע הווידאו. השידור נעצר.');if(broadcastRecorder?.state==='recording')broadcastRecorder.stop();}).finally(()=>pending--);
+    uploadQueue=uploadQueue.then(async()=>{if(failed)return;for(let attempt=0;attempt<3;attempt++){try{const r=await fetch('/api/workspace/broadcast/'+streamId+'/chunk',{method:'POST',headers:{'Content-Type':blob.type||'application/octet-stream','x-sequence':String(n)},body:blob,signal:AbortSignal.timeout(20000)});const ack=await r.json();if(!r.ok)throw Error(ack.error);showBroadcastStatus(ack);return;}catch(e){if(attempt===2)throw e;}}}).catch(()=>{failed=true;el('server-stream-state').textContent='השרת לא אישר את מקטע הווידאו. השידור נעצר.';toast('השרת לא אישר את מקטע הווידאו. השידור נעצר.');if(broadcastRecorder?.state==='recording')broadcastRecorder.stop();}).finally(()=>pending--);
   }
   async function startBroadcast(mode){
-    if(broadcast)return stopBroadcast();if(!getCamera())return toast('הפעל קודם מצלמה.');if(!window.MediaRecorder||!output.captureStream)return toast('הדפדפן אינו תומך בהעברת וידאו.');
+    if(broadcastStarting)return;if(broadcast)return stopBroadcast();if(!getCamera())return toast('הפעל קודם מצלמה.');if(!window.MediaRecorder||!output.captureStream)return toast('הדפדפן אינו תומך בהעברת וידאו.');
+    broadcastStarting=true;
     try{
       const types=['video/webm;codecs=vp8,opus','video/webm','video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4'],mime=types.find(t=>MediaRecorder.isTypeSupported(t));if(!mime)throw Error();
       broadcastStream=createStream();broadcast=await api('broadcast/start','POST',{mode,mime});broadcastRecorder=new MediaRecorder(broadcastStream,{mimeType:mime,videoBitsPerSecond:2500000});sequence=0;pending=0;failed=false;uploadQueue=Promise.resolve();broadcastRecorder.ondataavailable=e=>enqueue(e.data);
       broadcastRecorder.onstop=()=>{const stream=broadcast,id=stream?.id;uploadQueue.finally(async()=>{if(id)try{await api('broadcast/'+id+'/stop','POST');}catch{}broadcastStream?.getTracks().forEach(t=>t.stop());broadcast=null;broadcastRecorder=null;broadcastStream=null;el('send-server').classList.remove('broadcast-on');el('send-rtmp').classList.remove('broadcast-on');el('send-server').textContent='שלח וידאו לשרת';el('send-rtmp').textContent='שדר ל־RTMP';el('preview-label').textContent='PREVIEW';});};
       broadcastRecorder.onerror=()=>{failed=true;void stopBroadcast();};broadcastRecorder.start(1000);
-      el(mode==='rtmp'?'send-rtmp':'send-server').classList.add('broadcast-on');el(mode==='rtmp'?'send-rtmp':'send-server').textContent='עצור שידור';el('preview-label').textContent=mode==='rtmp'?'RTMP · נשלח ליעד השמור':'SERVER · וידאו מעובד';toast(mode==='rtmp'?'הווידאו נשלח ליעד ה־RTMP השמור.':'הווידאו המעובד נשלח לשרת. פתח את נגן השרת כדי לצפות.');
-    }catch{broadcastStream?.getTracks().forEach(t=>t.stop());broadcastStream=null;broadcast=null;toast(mode==='rtmp'?'הגדר יעד RTMP בניהול השרת ובדוק את מפתח השידור.':'לא ניתן להתחיל העברת וידאו. בדוק את כלי הווידאו בשרת.');}
+      el(mode==='rtmp'?'send-rtmp':'send-server').classList.add('broadcast-on');el(mode==='rtmp'?'send-rtmp':'send-server').textContent='עצור שידור';showBroadcastStatus(broadcast);toast('מתחבר לשרת וממתין לאישור יציאת וידאו.');
+    }catch{if(broadcast)try{await api('broadcast/'+broadcast.id+'/stop','POST');}catch{}broadcastStream?.getTracks().forEach(t=>t.stop());broadcastStream=null;broadcast=null;broadcastRecorder=null;toast(mode==='rtmp'?'הגדר יעד RTMP בניהול השרת ובדוק את מפתח השידור.':'לא ניתן להתחיל העברת וידאו. בדוק את כלי הווידאו בשרת.');}finally{broadcastStarting=false;}
   }
   async function stopBroadcast(){if(broadcastRecorder?.state==='recording')broadcastRecorder.stop();}
   el('send-server').onclick=()=>startBroadcast('preview');el('send-rtmp').onclick=()=>startBroadcast('rtmp');
+  let statusPending=false,statusFailures=0;
+  setInterval(async()=>{if(!broadcast||statusPending)return;statusPending=true;try{const data=await api('overview'),s=data.broadcasts.find(s=>s.id===broadcast?.id);statusFailures=0;if(s)showBroadcastStatus(s);}catch{if(++statusFailures>=3&&broadcast){failed=true;el('server-stream-state').textContent='החיבור לשרת אבד. השידור נעצר.';void stopBroadcast();}}finally{statusPending=false;}},2000);
   setInterval(async()=>{if(!authenticated||document.hidden)return;try{const result=await api('commands?after='+lastCommand);for(const c of result.commands)if(Date.now()-c.at<10000)void play(c.recipe);lastCommand=result.latest;}catch{}},800);
   setInterval(refresh,8000);
   return{draw,attach,refresh,play,stopRecipe,stopBroadcast,setAuth(value){authenticated=value;if(value)void refresh();},mute(on){broadcastStream?.getAudioTracks().forEach(t=>t.enabled=on);}};

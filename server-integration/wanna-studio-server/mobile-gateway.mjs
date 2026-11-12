@@ -132,5 +132,6 @@ if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.ur
     if(process.argv.includes('--open')&&process.platform==='win32')spawn('cmd.exe',['/d','/c','start','','http://127.0.0.1:'+port+'/mobile/pair'],{windowsHide:true});
   });
   app.server.on('error',e=>{console.error('MOBILE_START_FAILED '+e.code);process.exitCode=1;});
-  const stop=()=>{tunnel?.kill();app.server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),2000).unref();};process.on('SIGINT',stop);process.on('SIGTERM',stop);
+  // stop accepting, then let the workspace finish (TikTok disconnect, Vardyverse final flush or spool write, encoders) before exiting; 2 s hard fallback
+  const stop=()=>{tunnel?.kill();app.server.close();app.workspace.close().finally(()=>process.exit(0));setTimeout(()=>process.exit(0),2000).unref();};process.on('SIGINT',stop);process.on('SIGTERM',stop);
 }

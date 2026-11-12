@@ -49,6 +49,9 @@ export class FxEngine {
   constructor(video, out, { log = console.log } = {}) {
     this.video = video; this.out = out; this.ctx = out.getContext('2d'); this.log = log;
     this.effects = {}; this.active = null; this.face = null; this.bbox = null; this.ready = false;
+    // transparent program (?stage=<url>): only the person (cut out by the body mask) is drawn, nothing opaque under her —
+    // the page behind the canvas (the stage iframe) is the background. Remixes, the effect's room and the foreground still paint over it.
+    this.transparent = false;
     // battle clips on the target's head (snipe, tomato, diaper, gloves…): battle-stage.js. Its hits shake our picture.
     this.battle = BattleStage ? new BattleStage({ log, onHit: h => this.battleHit(h) }) : noBattle(); this.battle.load();
   }
@@ -300,7 +303,9 @@ export class FxEngine {
   drawRemix() {
     const ctx = this.ctx, W = this.W, H = this.H, st = this.active, v = st.remix;
     const t = (performance.now() - st.t0) / 1000, dur = v.duration || 10, fadeIn = 0.3, fadeOut = 0.7;
-    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.drawImage(this.video, 0, 0, W, H);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    // transparent program: her cut-out instead of the camera, so the remix covers the stage page as it fades in and uncovers it as it fades out
+    if (this.transparent) { ctx.clearRect(0, 0, W, H); this.personLayer(ctx, 1); } else ctx.drawImage(this.video, 0, 0, W, H);
     if (v.videoWidth) {
       const a = Math.min(clamp(t / fadeIn), clamp((dur - t) / fadeOut));
       const sc = Math.max(W / v.videoWidth, H / v.videoHeight), w = v.videoWidth * sc, h = v.videoHeight * sc;
@@ -412,6 +417,7 @@ export class FxEngine {
     const v = this.video, W = this.W, H = this.H, n = this.frameNo = (this.frameNo || 0) + 1;
     // never more than two models in one frame: face always; pose on even frames; body mask on odd frames
     const remix = !!this.active?.remix, busy = !!this.active || this.debug; // a remix is just a video: no pose / mask needed
+    const cut = !!this.transparent; // transparent program: the person is cut out on every frame she is drawn, during a remix too
     if (!this.faceBusy) {
       const fr = this.faceLm.detectForVideo(v, ts);
       // every head on screen: center, width, box (for choosing a target)
@@ -462,7 +468,7 @@ export class FxEngine {
     }
     // Body mask (person vs background) on a half-size copy of the picture
     this.maskFresh = false;
-    if (!remix && n % 2 === 1 && (busy || n % 6 === 1)) { // while an effect runs: every 2nd frame; idle: every 6th
+    if ((!remix || cut) && n % 2 === 1 && (busy || cut || n % 6 === 1)) { // while an effect runs (or the program is transparent): every 2nd frame; idle: every 6th
       this.segCtx.drawImage(v, 0, 0, this.segIn.width, this.segIn.height);
       const sr = this.seg.segmentForVideo(this.segIn, ts), m = sr.confidenceMasks?.[0];
       if (m) {
@@ -716,7 +722,7 @@ export class FxEngine {
       for (const s of st.fx.timeline) {
         const k = (t - s.t) / s.d;
         // vanish: she dissolves into blurred light; return: she condenses back from light to sharp
-        if (s.do === 'vanish' && t >= s.t) { const p = clamp(k); personA = Math.min(personA, 1 - p); layerA = Math.min(layerA, 1 - p); pBlur = Math.max(pBlur, ease(p) * W / 28); pGlow = Math.max(pGlow, Math.sin(Math.PI * p) * 0.8); if (!st.vanishing) { st.vanishing = true; this.fillPlate(); this.filledReady = true; } }
+        if (s.do === 'vanish' && t >= s.t) { const p = clamp(k); personA = Math.min(personA, 1 - p); layerA = Math.min(layerA, 1 - p); pBlur = Math.max(pBlur, ease(p) * W / 28); pGlow = Math.max(pGlow, Math.sin(Math.PI * p) * 0.8); if (!st.vanishing) { st.vanishing = true; if (!this.transparent) { this.fillPlate(); this.filledReady = true; } } } // (a transparent program never shows her room's plate: she dissolves over the stage page)
         if (s.do === 'return' && t >= s.t) { const p = clamp(k); personA = Math.max(personA, ease(p)); layerA = 0; pBlur = (1 - ease(p)) * W / 22; pGlow = (1 - p) * 0.9; returnFlash = Math.sin(Math.PI * Math.min(1, p * 1.6)); }
         if (k >= 0 && (k <= 1 || PERSIST.includes(s.do))) draw.push({ s, k });
       }
@@ -728,15 +734,18 @@ export class FxEngine {
     let bg = null;
     if (st) { const t = (performance.now() - st.t0) / 1000; for (const s of st.fx.timeline) if (s.do === 'background' && t >= s.t && t <= s.t + s.d) { const im = st.fx.img[s.image]; if (im?.naturalWidth) bg = { im, a: Math.min(ease((t - s.t) / (s.fade || 0.6)), ease((s.t + s.d - t) / (s.fade || 0.6))) }; } }
     ctx.globalCompositeOperation = 'source-over';
+    // transparent program (?stage=): the canvas is cleared and only her cut-out goes on it — the stage page behind the canvas
+    // is the background. The effect's room still fades in over the stage; her own room (camera / plate) is never painted.
+    const cut = !!this.transparent; if (cut) ctx.clearRect(0, 0, W, H);
     if (bg) {
       const im = bg.im, sc = Math.max(W / im.naturalWidth, H / im.naturalHeight), iw = im.naturalWidth * sc, ih = im.naturalHeight * sc;
-      ctx.drawImage(this.video, 0, 0, W, H);
+      if (!cut) ctx.drawImage(this.video, 0, 0, W, H);
       ctx.globalAlpha = bg.a; ctx.drawImage(im, (W - iw) / 2, (H - ih) / 2, iw, ih); ctx.globalAlpha = 1;
       this.personLayer(ctx, personA, { blur: pBlur, glow: pGlow, grade: bg });
       this.plateDirty = true; // tmp was used for the rim light; updatePlate redraws it next frame anyway
     }
-    else if (personA >= 0.999 && pBlur < 0.5) ctx.drawImage(this.video, 0, 0, W, H);
-    else { if (!this.filledReady) { this.fillPlate(); this.filledReady = true; } ctx.drawImage(this.filled, 0, 0); this.personLayer(ctx, personA, { blur: pBlur, glow: pGlow }); }
+    else if (personA >= 0.999 && pBlur < 0.5) { if (cut) this.personLayer(ctx, 1); else ctx.drawImage(this.video, 0, 0, W, H); }
+    else { if (!cut) { if (!this.filledReady) { this.fillPlate(); this.filledReady = true; } ctx.drawImage(this.filled, 0, 0); } this.personLayer(ctx, personA, { blur: pBlur, glow: pGlow }); }
     if (personA >= 0.999 && pBlur < 0.5) this.filledReady = false;
     if (returnFlash > 0.01) { const at = this.bbox ? { x: this.bbox.cx, y: this.bbox.cy } : { x: W / 2, y: H / 2 }; this.drawGlowBurst(ctx, at, Math.max(W, H) * 0.55, st?.fx.returnColor || '#a259ff', returnFlash * 0.75); }
     if (!st) { this.lastMesh = null; if (this.debug) this.drawDebug(ctx); return; }
@@ -1023,6 +1032,7 @@ export class FxEngine {
     }
     if (sx || sy || zoom > 1.0005) {
       if (!this.post || this.post.width !== W) { this.post = canvas(W, H); this.postCtx = this.post.getContext('2d'); }
+      if (this.transparent) this.postCtx.clearRect(0, 0, W, H); // a transparent picture must not pile up on last frame's copy
       this.postCtx.drawImage(this.out, 0, 0);
       const z = zoom + Math.hypot(sx, sy) / W * 2.2; // zoom a bit more than the shake so no edges show
       ctx.save(); ctx.globalCompositeOperation = 'copy'; ctx.translate(W / 2 + sx, H / 2 + sy); ctx.scale(z, z); ctx.drawImage(this.post, -W / 2, -H / 2); ctx.restore();

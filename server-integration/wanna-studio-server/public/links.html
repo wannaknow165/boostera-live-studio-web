@@ -66,6 +66,9 @@ function items() {
   add('📺 שכבות נקיות (מקור דפדפן)', 'פרונט שקוף', 'clean-foreground', '/clean/foreground', '');
   add('📺 שכבות נקיות (מקור דפדפן)', 'רקע', 'clean-background', '/clean/background', '');
   add('📺 שכבות נקיות (מקור דפדפן)', 'הכל ביחד (מצלמה + אפקטים)', 'clean-program', '/clean/program?src=phone', '');
+  // + the wall from the cloud under the camera cut-out (one browser source for everything): stage=<https address of the wall>.
+  //   Placeholder address — put the real creator wall in it; an & inside the wall's own address is written %26 (fx/stage-url.js).
+  add('📺 שכבות נקיות (מקור דפדפן)', 'הכל ביחד + קיר מהענן', 'clean-program-stage', '/clean/program?src=phone&stage=https://vardy-verse-connect.lovable.app/stage?creator=NAME%26t=TOKEN', '', 'stage = כתובת הקיר (https בלבד). להחליף NAME ו-TOKEN; & בתוך כתובת הקיר נכתב %26. הקיר למטה, המשדרת גזורה מעליו, האפקטים מעל הכל — מקור דפדפן אחד ב-Studio');
   return out;
 }
 function render() {

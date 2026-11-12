@@ -2,6 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {LiveEvents} from '../lib/mobile-live-events.mjs';
+test('chat survives busy likes, is bounded and resets on a new account',async()=>{
+ class Fake extends EventEmitter{async connect(){return{roomId:'12345'};}async disconnect(){}}
+ const events=new LiveEvents({factory:()=>new Fake()});await events.connect('first');
+ for(let i=0;i<110;i++)events.ingest('chat',{common:{msgId:String(i)},comment:'message '+i,user:{uniqueId:'viewer'}});
+ for(let i=0;i<100;i++)events.ingest('like',{likeCount:1});
+ assert.equal(events.state.chat.length,100);assert.equal(events.state.chat[0].text,'message 109');assert.equal(events.state.events.some(e=>e.type==='chat'),false);
+ await events.connect('second');assert.equal(events.state.chat.length,0);assert.equal(events.state.lastEventAt,null);await events.disconnect();
+});
+test('disconnect during asynchronous connector construction cannot revive an old account',async()=>{
+ let release,disconnected=false;const events=new LiveEvents({factory:()=>new Promise(r=>release=r)});
+ const pending=events.connect('first');await new Promise(r=>setImmediate(r));await events.disconnect();
+ release({async disconnect(){disconnected=true;},connect(){throw Error('must not connect');}});
+ await pending;assert.equal(events.state.status,'disconnected');assert.equal(events.client,null);assert.equal(disconnected,true);
+});
 test('gift streak is counted exactly once at final event',()=>{
  const automations=[],events=new LiveEvents({onAutomation:e=>automations.push(e)});
  const gift={user:{id:'9007199254740993123',displayId:'customer'},giftId:'1',groupId:'streak',gift:{type:1,name:'Rose',diamondCount:1},repeatCount:4};

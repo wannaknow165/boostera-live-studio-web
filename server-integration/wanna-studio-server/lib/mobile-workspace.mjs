@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {LiveEvents} from './mobile-live-events.mjs';
+import {eventProvider} from './mobile-event-provider.mjs';
 import {videoModels,generateRemix,resumeVideo} from './mobile-generation.mjs';
 import {Broadcasts} from './mobile-broadcast.mjs';
 import {readCapturedTarget} from './mobile-rtmp-import.mjs';
@@ -31,7 +32,8 @@ export function createWorkspace({root,upstreamPort=8800,apiKey='',clientKey='',e
   const send=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));return true;};
   async function upstream(route,method='GET',data){const r=await fetch('http://127.0.0.1:'+upstreamPort+route,{method,headers:{'x-api-key':apiKey,'x-key':clientKey,...(data!==undefined?{'Content-Type':'application/json'}:{})},...(data!==undefined?{body:JSON.stringify(data)}:{}),signal:AbortSignal.timeout(20000)});const j=await r.json();if(!r.ok)throw fail('EFFECTS_API_'+r.status,r.status);return j;}
   let publicBase='',working=0;const tickets=new Map(),commands=[];let commandSequence=0;
-  const live=new LiveEvents({factory:liveFactory,signApiKey:env.SIGN_API_KEY||env.EULER_API_KEY||'',onAutomation:event=>fire(event)});
+  const provider=eventProvider(root,env,liveFactory);
+  const live=new LiveEvents({factory:(handle,options)=>provider.create(handle,options),signApiKey:env.SIGN_API_KEY||env.EULER_API_KEY||'',onAutomation:event=>fire(event)});
   const ruleTimes=new Map();
   function command(recipe){const entry={sequence:++commandSequence,at:Date.now(),recipe};commands.push(entry);if(commands.length>40)commands.shift();return entry;}
   async function fire(event){
@@ -42,7 +44,7 @@ export function createWorkspace({root,upstreamPort=8800,apiKey='',clientKey='',e
   }
   function rtmpUrl(){if(!db.rtmp?.url)return null;return db.rtmp.key?db.rtmp.url.replace(/\/$/,'')+'/'+db.rtmp.key:db.rtmp.url;}
   const broadcasts=new Broadcasts({root,ffmpeg:tools.ffmpeg,rtmp:rtmpUrl});
-  function config(){return{version:'1.1.0',mediaTools:tools.installed,aiConfigured:Boolean(env.KLING_API_KEY||env.OPENROUTER_API_KEY),aiReachable:Boolean(env.OPENROUTER_API_KEY||env.KLING_API_KEY&&publicBase),remixConfigured:Boolean(env.OPENROUTER_API_KEY),remixModel:env.FX_REMIX_MODEL||env.FX_VIDEO_MODEL||'kwaivgi/kling-v3.0-pro',publicHttps:Boolean(publicBase),rtmpConfigured:Boolean(rtmpUrl()),rtmpHost:db.rtmp?.host||null,tiktok:{readEventsInstalled:true,connected:live.state.status==='connected',startLive:false,invitations:false,startBattle:false,reason:'ACCOUNT_WRITE_CONNECTOR_REQUIRED'},features:[{id:'camera',name:'מצלמה ומיקרופון',ready:true},{id:'tracking',name:'מעקב פנים וגוף',ready:true},{id:'multihead',name:'בחירת ראש מתוך ארבעה',ready:true},{id:'customer',name:'לקוחות ואווטרים',ready:true},{id:'recipes',name:'שכבות על פנים וגוף',ready:true},{id:'generation',name:'יצירת סרטונים מותאמים',ready:Boolean(env.OPENROUTER_API_KEY||env.KLING_API_KEY&&publicBase)},{id:'automations',name:'כללי מתנות ובאטלים',ready:true},{id:'ingest',name:'וידאו מעובד לשרת',ready:tools.installed},{id:'rtmp',name:'שידור RTMP',ready:tools.installed&&Boolean(rtmpUrl())},{id:'battle_read',name:'קליטת אירועי TikTok מחוברת',ready:live.state.status==='connected'},{id:'live_start',name:'פתיחת לייב עצמאית ב־TikTok',ready:false},{id:'battle_write',name:'הזמנות ופתיחת באטל ב־TikTok',ready:false}]};}
+  function config(){return{version:'1.2.0',mediaTools:tools.installed,aiConfigured:Boolean(env.KLING_API_KEY||env.OPENROUTER_API_KEY),aiReachable:Boolean(env.OPENROUTER_API_KEY||env.KLING_API_KEY&&publicBase),remixConfigured:Boolean(env.OPENROUTER_API_KEY),remixModel:env.FX_REMIX_MODEL||env.FX_VIDEO_MODEL||'kwaivgi/kling-v3.0-pro',publicHttps:Boolean(publicBase),rtmpConfigured:Boolean(rtmpUrl()),rtmpHost:db.rtmp?.host||null,tiktok:{readEventsInstalled:true,chat:true,readAloud:true,provider:provider.info().provider,connected:live.state.status==='connected',startLive:false,invitations:false,startBattle:false,reason:'ACCOUNT_WRITE_CONNECTOR_REQUIRED'},features:[{id:'camera',name:'מצלמה ומיקרופון',ready:true},{id:'tracking',name:'מעקב פנים וגוף',ready:true},{id:'multihead',name:'בחירת ראש מתוך ארבעה',ready:true},{id:'customer',name:'לקוחות ואווטרים',ready:true},{id:'recipes',name:'שכבות על פנים וגוף',ready:true},{id:'generation',name:'יצירת סרטונים מותאמים',ready:Boolean(env.OPENROUTER_API_KEY||env.KLING_API_KEY&&publicBase)},{id:'automations',name:'כללי מתנות ובאטלים',ready:true},{id:'ingest',name:'וידאו מעובד לשרת',ready:tools.installed},{id:'rtmp',name:'שידור RTMP',ready:tools.installed&&Boolean(rtmpUrl())},{id:'chat_read',name:'צ׳אט חי והקראת הודעות',ready:live.state.status==='connected'},{id:'battle_read',name:'קליטת אירועי TikTok מחוברת',ready:live.state.status==='connected'},{id:'live_start',name:'פתיחת לייב עצמאית ב־TikTok',ready:false},{id:'battle_write',name:'הזמנות ופתיחת באטל ב־TikTok',ready:false}]};}
   async function run(job){
     working++;job.status='processing';job.startedAt=Date.now();save();
     try{
@@ -114,6 +116,12 @@ export function createWorkspace({root,upstreamPort=8800,apiKey='',clientKey='',e
     }
     if(p==='/api/workspace/test-event'&&req.method==='POST'){const b=await json(req);return send(res,200,await fire({type:text(b.type,40),gift:text(b.gift,60),count:number(b.count,1,1,10),user:text(b.user,50),supporter:text(b.supporter,60),source:'manual-test'}));}
     if(p==='/api/workspace/tiktok'&&req.method==='GET')return send(res,200,live.snapshot());
+    if(p==='/api/workspace/tiktok/provider'&&req.method==='GET')return send(res,200,{...provider.info(),canConfigure:session.id==='local-desktop'});
+    if(p==='/api/workspace/tiktok/provider'&&req.method==='PUT'){
+      if(session.id!=='local-desktop')throw fail('LOCAL_SETUP_ONLY',403);
+      const b=await json(req);if(['connecting','connected'].includes(live.state.status))throw fail('DISCONNECT_EVENTS_FIRST',409);
+      return send(res,200,provider.save(b));
+    }
     if(p==='/api/workspace/tiktok/connect'&&req.method==='POST'){const b=await json(req);return send(res,200,await live.connect(text(b.handle,40)));}
     if(p==='/api/workspace/tiktok/disconnect'&&req.method==='POST')return send(res,200,await live.disconnect());
     if(['/api/workspace/tiktok/invite','/api/workspace/tiktok/start-battle'].includes(p))return send(res,501,{error:'ACCOUNT_WRITE_CONNECTOR_REQUIRED',message:'לא הוגדר חיבור מורשה לשליחת הזמנות או לפתיחת באטל. קליטת אירועי לייב זמינה בנפרד.'});

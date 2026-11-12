@@ -9,30 +9,33 @@ function timing(settings={}){const start=number(settings.startTimeMs)||(number(s
 export class LiveEvents extends EventEmitter{
   constructor({factory,signApiKey='',onAutomation=async()=>{}}={}){
     super();this.factory=factory;this.signApiKey=signApiKey;this.onAutomation=onAutomation;
-    this.client=null;this.generation=0;this.seen=new Map();this.listeners=new Set();
-    this.state={status:'disconnected',handle:'',roomId:null,viewers:0,likes:0,gifts:0,diamonds:0,battle:null,participants:[],supporters:[],events:[],lastEventAt:null,error:null};
+    this.client=null;this.generation=0;this.sequence=0;this.seen=new Map();this.listeners=new Set();
+    this.state={status:'disconnected',handle:'',roomId:null,viewers:0,likes:0,gifts:0,diamonds:0,follows:0,shares:0,subscribers:0,battle:null,participants:[],supporters:[],events:[],chat:[],lastEventAt:null,error:null};
   }
   snapshot(){return structuredClone(this.state);}
   publish(){const state=this.snapshot();this.emit('state',state);return state;}
-  log(type,data){const ev={type,at:Date.now(),...data};this.state.events.unshift(ev);this.state.events=this.state.events.slice(0,60);this.state.lastEventAt=ev.at;return ev;}
+  log(type,data){const ev={id:++this.sequence,type,at:Date.now(),...data};this.state.events.unshift(ev);this.state.events=this.state.events.slice(0,60);this.state.lastEventAt=ev.at;return ev;}
   async connect(handle){
     if(!/^@?[a-zA-Z0-9_.]{2,32}$/.test(handle||''))throw Object.assign(new Error('INVALID_TIKTOK_HANDLE'),{status:400});
-    await this.disconnect();const generation=++this.generation;this.state={...this.state,status:'connecting',handle:handle.replace(/^@/,''),roomId:null,error:null,battle:null,participants:[],supporters:[],gifts:0,diamonds:0,viewers:0,likes:0,events:[]};this.seen.clear();this.publish();
+    await this.disconnect();const generation=++this.generation;this.state={...this.state,status:'connecting',handle:handle.replace(/^@/,''),roomId:null,error:null,battle:null,participants:[],supporters:[],gifts:0,diamonds:0,viewers:0,likes:0,follows:0,shares:0,subscribers:0,events:[],chat:[],lastEventAt:null};this.seen.clear();this.publish();
+    let client,timeout;
     try{
       const options={processInitialData:false,enableExtendedGiftInfo:true,...(this.signApiKey?{signApiKey:this.signApiKey}:{})};
-      if(this.factory)this.client=await this.factory(this.state.handle,options);
-      else{const mod=await import('tiktok-live-connector');const Connection=mod.TikTokLiveConnection||mod.WebcastPushConnection;if(!Connection)throw Error('CONNECTOR_NOT_INSTALLED');this.client=new Connection(this.state.handle,options);}
-      const client=this.client;
-      for(const event of ['gift','chat','like','roomUser','member','follow','share','linkMicBattle','linkMicArmies','linkMicBattleItemCard','linkMicBattlePunishFinish','linkMicMethod','linkMessage','linkLayer']){
+      if(this.factory)client=await this.factory(this.state.handle,options);
+      else{const mod=await import('tiktok-live-connector');const Connection=mod.TikTokLiveConnection||mod.WebcastPushConnection;if(!Connection)throw Error('CONNECTOR_NOT_INSTALLED');client=new Connection(this.state.handle,options);}
+      if(generation!==this.generation){await client.disconnect();return this.snapshot();}
+      this.client=client;
+      for(const event of ['gift','chat','like','roomUser','member','follow','share','subscribe','emote','managedBattle','linkMicBattle','linkMicArmies','linkMicBattleItemCard','linkMicBattlePunishFinish','linkMicMethod','linkMessage','linkLayer']){
         client.on(event,data=>{if(generation===this.generation)try{this.ingest(event,data);}catch{this.state.error='UNRECOGNIZED_EVENT_PAYLOAD';this.publish();}});
       }
       client.on('error',()=>{if(generation===this.generation){this.state.error='TIKTOK_CONNECTION_ERROR';this.publish();}});
-      client.on('disconnected',()=>{if(generation===this.generation){this.state.status='disconnected';this.publish();}});
+      client.on('disconnected',()=>{if(generation===this.generation){if(this.state.status!=='ended')this.state.status='disconnected';this.publish();}});
       client.on('streamEnd',()=>{if(generation===this.generation){this.state.status='ended';this.publish();}});
-      const connected=await client.connect();
+      const connected=await Promise.race([client.connect(),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Object.assign(Error('CONNECT_TIMEOUT'),{code:'CONNECT_TIMEOUT'})),20000);})]);
+      clearTimeout(timeout);
       if(generation!==this.generation){await client.disconnect();return this.snapshot();}
       this.state.status='connected';this.state.roomId=str(connected?.roomId||client.roomId);this.state.error=null;return this.publish();
-    }catch(error){if(generation===this.generation){this.state.status='error';this.state.error=/not live|offline|not online|isn't online/i.test(error.message+' '+error.name)?'CREATOR_OFFLINE':error.code==='ERR_MODULE_NOT_FOUND'?'CONNECTOR_NOT_INSTALLED':'CONNECTION_FAILED_OR_SIGNING_REQUIRED';this.publish();}return this.snapshot();}
+    }catch(error){clearTimeout(timeout);if(generation===this.generation){++this.generation;this.client=null;this.state.status='error';this.state.error=/not live|offline|not online|isn't online/i.test(error.message+' '+error.name)?'CREATOR_OFFLINE':error.code==='ERR_MODULE_NOT_FOUND'?'CONNECTOR_NOT_INSTALLED':['TIKTOOLS_KEY_REQUIRED','TIKTOOLS_TIMEOUT','TIKTOOLS_PROVIDER_REJECTED','TIKTOOLS_ROOM_MISMATCH','TIKTOOLS_CONNECTION_FAILED','CONNECT_TIMEOUT'].includes(error.code)?error.code:'CONNECTION_FAILED_OR_SIGNING_REQUIRED';this.publish();}if(client)try{await client.disconnect();}catch{}return this.snapshot();}
   }
   async disconnect(){++this.generation;const client=this.client;this.client=null;if(client)try{await client.disconnect();}catch{}this.state.status='disconnected';return this.publish();}
   ingest(type,data={}){
@@ -55,7 +58,21 @@ export class LiveEvents extends EventEmitter{
       void Promise.resolve(this.onAutomation({type:'gift',user:this.state.handle,supporter:who.handle||who.name,gift:name,count,source:'tiktok',eventId:messageId||groupKey})).catch(()=>{});
     }else if(type==='roomUser'){this.state.viewers=number(data.viewerCount??data.total??data.userCount);this.log(type,{viewers:this.state.viewers});}
     else if(type==='like'){this.state.likes=number(data.totalLikeCount??data.total)||this.state.likes+number(data.likeCount);this.log(type,{user:who,count:number(data.likeCount)});}
-    else if(type==='chat')this.log(type,{user:who,text:str(data.content??data.comment,300)});
+    else if(type==='chat'||type==='emote'){
+      const content=type==='emote'?'אימוג׳י · '+str(data.emoteId,80):str(data.content??data.comment,1000);
+      if(!content.trim())return false;
+      const ev=this.log(type,{user:who,text:content});this.state.chat.unshift(ev);this.state.chat=this.state.chat.slice(0,100);
+    }else if(['follow','share','subscribe'].includes(type)){
+      this.state[{follow:'follows',share:'shares',subscribe:'subscribers'}[type]]++;this.log(type,{user:who});
+    }else if(type==='managedBattle'){
+      const incoming=data.battle,old=this.state.battle;if(!incoming?.id)return false;
+      const same=old?.id===incoming.id;if(same&&old.serverTsMs&&incoming.serverTsMs&&incoming.serverTsMs<old.serverTsMs)return false;
+      this.state.battle={...incoming,status:same&&old.status==='ended'?'ended':incoming.status,observedAt:Date.now()};
+      this.state.participants=incoming.scores.map(s=>({id:s.id,name:s.id.startsWith('team:')?'קבוצה '+s.id.slice(5):s.id,handle:''}));
+      this.log('battle',{battleId:incoming.id,status:this.state.battle.status});
+      if(incoming.status==='active'&&(!same||old.status==='pending')&&incoming.startTimeMs&&Math.abs(Date.now()-incoming.startTimeMs)<90000)
+        void Promise.resolve(this.onAutomation({type:'battle_start',user:this.state.handle,source:'tiktok',battleId:incoming.id})).catch(()=>{});
+    }
     else if(type==='linkMicBattle'){
       const id=str(data.battleId||data.battleSettings?.battleId),old=this.state.battle;
       const settings=data.battleSettings||{},times=timing(settings),action=number(data.action),finished=[5,6].includes(action)||[2,3,4].includes(number(settings.status)),active=action===4||number(settings.status)===1;

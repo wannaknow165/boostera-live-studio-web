@@ -11,7 +11,7 @@ const excluded=new Set(['node_modules','data','runtime','media','.env','server.e
 fs.cpSync(project,root,{recursive:true,filter:src=>!path.relative(project,src).split(path.sep).some(p=>excluded.has(p))});
 fs.symlinkSync(path.join(project,'node_modules'),path.join(root,'node_modules'),process.platform==='win32'?'junction':'dir');
 const media=configureMediaTools(root),jobs=[];
-const env={...process.env,PORT:'18880',MOBILE_PORT:'18881',WANNA_TEST_URL:'http://127.0.0.1:18881',PUBLIC_BASE_URL:'http://127.0.0.1:18880',DRY_RUN:'1',OPENROUTER_API_KEY:'',KLING_API_KEY:'',SIGN_API_KEY:'',API_TOKEN:randomBytes(24).toString('hex'),STUDIO_CLIENT_KEY:randomBytes(24).toString('hex'),PYTHONIOENCODING:'utf-8'};
+const env={...process.env,PORT:'18880',MOBILE_PORT:'18881',WANNA_TEST_URL:'http://127.0.0.1:18881',PUBLIC_BASE_URL:'http://127.0.0.1:18880',DRY_RUN:'1',OPENROUTER_API_KEY:'',KLING_API_KEY:'',SIGN_API_KEY:'',TIKTOOLS_API_KEY:'',EULER_API_KEY:'',API_TOKEN:randomBytes(24).toString('hex'),STUDIO_CLIENT_KEY:randomBytes(24).toString('hex'),PYTHONIOENCODING:'utf-8'};
 async function ready(url){for(let i=0;i<100;i++){try{if((await fetch(url)).ok)return;}catch{}await new Promise(r=>setTimeout(r,100));}throw Error('Test server not ready');}
 async function run(script){await new Promise((resolve,reject)=>{const p=spawn(process.env.PYTHON||'python',[script],{cwd:root,env,windowsHide:true,stdio:'inherit'});p.once('error',reject);p.once('exit',code=>code===0?resolve():reject(Error('Browser test failed: '+script)));});}
 try{

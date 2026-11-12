@@ -1,3 +1,15 @@
+## Mobile 1.2.0 — chat and event reader
+
+The camera and management pages now share a dedicated chat feed (100 messages), activity feed, viewer/like/gift/follow/share counts, and optional speech for new messages. Speech starts disabled and does not change microphone mute. HTML in comments is displayed as text. Reconnecting to another account clears previous messages.
+
+Event transport reuses the existing BOOSTERA Tik.Tools WebSocket adapter, extended with chat, social, subscription, emote, viewer counts, and managed battle/score events. Direct tiktok-live-connector remains available. Set TIKTOOLS_API_KEY locally or use the local page's event-provider settings. Secrets stay in ignored server data and never appear in public snapshots. Provider changes require disconnection first. No automatic paid subscription or provider connection is started.
+
+Verification: 27 mobile server tests and all camera, manager, composition/HLS and chat/battle browser flows passed with controlled inputs. The separate root panel's 38 tests also pass. This does not establish real TikTok chat reception: no configured event-provider key was available during this release.
+
+RTMP publishing uses the existing media backend and requires a fresh destination. Native battle invitations and acceptance without LIVE Studio still require an account write connector; event reception does not supply that capability. A phone browser plus this backend is not a standalone phone-only native TikTok client.
+
+---
+
 # WANNA FX Mobile 1.1
 The mobile app lives inside server-integration/wanna-studio-server. It reuses the original engine, effect definitions, media, customer-video templates, stage events and automation rules. TikTok LIVE Studio is not required.
 

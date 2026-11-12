@@ -24,6 +24,10 @@ test('workspace persists clients, recipes and custom gift rules while keeping ke
  async function call(route,method='GET',data,headers={}){const response=await fetch('http://127.0.0.1:'+port+route,{method,headers:{...(data!==undefined?{'Content-Type':'application/json'}:{}),...headers},...(data!==undefined?{body:JSON.stringify(data)}:{})});return{status:response.status,value:await response.json()};}
  try{
    assert.equal((await call('/api/workspace/overview','GET',undefined,{'cf-connecting-ip':'203.0.113.1',host:'phone.example'})).status,401);
+   const provider=await call('/api/workspace/tiktok/provider','PUT',{provider:'tiktools',apiKey:'provider-test-secret'});
+   assert.equal(provider.status,200);assert.equal(provider.value.tiktoolsConfigured,true);assert.ok(!JSON.stringify(provider.value).includes('provider-test-secret'));
+   assert.equal((await call('/api/workspace/tiktok/provider','GET')).value.canConfigure,true);
+   assert.equal((await call('/api/workspace/tiktok/provider','PUT',{provider:'direct'},{origin:'https://evil.example'})).status,403);
    const client=(await call('/api/workspace/clients','POST',{name:'Test customer',handle:'@customer',avatarUrl:'/media/photo.png'})).value;assert.ok(client.id.startsWith('client_'));
    const recipe=(await call('/api/workspace/recipes','POST',{clientId:client.id,title:'Personal hat',url:'/media/photo.png',anchor:'head'})).value;
    const played=await call('/api/workspace/play','POST',{id:recipe.id});assert.equal(played.value.ok,true);let commands=await call('/api/workspace/commands?after=0');assert.equal(commands.value.commands.length,1);

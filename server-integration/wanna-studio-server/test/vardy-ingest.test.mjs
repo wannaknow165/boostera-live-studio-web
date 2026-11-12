@@ -6,6 +6,7 @@ import path from 'node:path';
 import {EventEmitter} from 'node:events';
 import {createVardyIngest,vardyIngestFromEnv,mapEvent,LikeWindows,DEFAULT_BASE_URL} from '../lib/vardy-ingest.mjs';
 import {LiveEvents} from '../lib/mobile-live-events.mjs';
+import {managedBattle} from '../lib/tiktools-events.mjs';
 
 const T0=1762000000000; // fixed "now" for the fake clock
 const tmp=()=>fs.mkdtempSync(path.join(os.tmpdir(),'vardy-test-'));
@@ -37,6 +38,11 @@ test('mapper: a gift is sent only at the end of its streak, with diamonds x coun
  const [v3]=mapEvent('gift',{...base,repeatEnd:1},{now:T0});assert.equal(v3.dedupe_key,'gift:msg-1'); // numeric repeatEnd (proto v3); msgId is the transaction id
  const [composite]=mapEvent('gift',{...base,repeatEnd:true,common:{}},{now:T0});assert.equal(composite.dedupe_key,`gift:7000000000000000001:5655:${T0}`);
  const [single]=mapEvent('gift',{...base,gift:{...base.gift,type:2,diamondCount:500},repeatCount:1,repeatEnd:0},{now:T0});assert.equal(single.payload.diamonds,500); // non-streakable gift: its only message counts
+ // Tik.Tools emits every gift with a boolean repeatEnd (lib/tiktools-connection.mjs): a one-shot gift (type 0) arrives as repeatEnd:false and still counts, as in LiveEvents.ingest
+ const oneShot=mapEvent('gift',{...base,gift:{...base.gift,type:0,diamondCount:29999},giftType:0,repeatCount:1,repeatEnd:false},{now:T0});
+ assert.equal(oneShot.length,1);assert.equal(oneShot[0].payload.diamonds,29999);assert.equal(oneShot[0].dedupe_key,'gift:msg-1');
+ const live=new LiveEvents();live.ingest('gift',{...base,gift:{...base.gift,type:0,diamondCount:29999},giftType:0,repeatCount:1,repeatEnd:false});
+ assert.equal(live.state.gifts,1);assert.equal(live.state.diamonds,29999); // the two counters agree
 });
 
 test('mapper: viewers, battle, member, follow/share and chat keep the contract shape',()=>{
@@ -48,6 +54,15 @@ test('mapper: viewers, battle, member, follow/share and chat keep the contract s
  const scores=check('linkMicArmies',{battleId:'b1',armies:{'1':{hostscore:'150',userArmies:[{userId:'9',nickname:'Giver',score:'150'}]},'2':{hostscore:'20',userArmies:[]}},triggerReason:1},'battle');
  assert.equal(scores.payload.phase,'scores');assert.deepEqual(scores.payload.scores.map(s=>[s.id,s.score]),[['1',150],['2',20]]);assert.equal(scores.payload.scores[0].contributors[0].name,'Giver');
  const legacy=check('linkMicArmies',{battleId:'b2',armies:[{key:'123',value:{points:'50'}}]},'battle');assert.equal(legacy.payload.scores[0].score,50);
+ // Tik.Tools provider: battle/battleArmies arrive already projected as managedBattle (lib/tiktools-events.mjs)
+ const projected=managedBattle({battleId:'0',matchId:'match',sessionId:'round',status:4,secsRemaining:10,serverTsMs:T0,durationSec:300,hosts:[{hostUserId:'1',isTeam:true,teamTotalScore:100,members:[{userId:'12345678',score:100}],contributors:[{userId:'87654321',score:60,nickname:'MVP'}]}]},'battleArmies');
+ const managed=check('managedBattle',{battle:projected,common:{msgId:'mb-1'}},'battle');
+ assert.equal(managed.dedupe_key,'battle:match:round:mb-1');assert.equal(managed.payload.phase,'managed');assert.equal(managed.payload.battle_id,'match:round');assert.equal(managed.payload.status,'active');
+ assert.equal(managed.payload.end_time,new Date(T0+10000).toISOString());assert.equal(managed.payload.start_time,new Date(T0+10000-300000).toISOString());assert.equal(managed.payload.duration,300);
+ assert.deepEqual(managed.payload.scores,[{id:'team:1',score:100,members:['12345678'],contributors:[{id:'87654321',handle:'',name:'MVP',score:60}]}]);
+ const noMsg=check('managedBattle',{battle:projected},'battle');assert.equal(noMsg.dedupe_key,`battle:match:round:managed:${T0}`); // no msgId: the provider's own timestamp
+ assert.deepEqual(mapEvent('managedBattle',{battle:null},{now:T0}),[]);assert.deepEqual(mapEvent('managedBattle',{},{now:T0}),[]);
+ const events=new LiveEvents();events.ingest('managedBattle',{battle:projected});assert.equal(events.state.battle.status,'active'); // LiveEvents and the mapper agree the battle exists
  assert.equal(check('member',{user:{id:'3',displayId:'newbie'},action:1,common:{msgId:'m-1'}},'member').dedupe_key,'member:m-1');
  check('follow',{user:{id:'4',displayId:'newfan'},common:{msgId:'s-1'}},'follow');
  check('share',{user:{id:'4',displayId:'newfan'},common:{msgId:'s-2'}},'share');

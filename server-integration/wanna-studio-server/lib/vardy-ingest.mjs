@@ -11,14 +11,16 @@
 // 60 s (or Retry-After when longer); other failures back off 2 s doubling up to 60 s. 413 halves the batch size; 422 (and
 // any other 4xx) drops that batch, since retrying the same events cannot help.
 // Event mapping (payload keys are snake_case; user = { id, handle, name }):
-//   gift          only the final message of a streak (repeatEnd true/1, or a non-streakable gift), never repeatEnd === false;
+//   gift          only the final message of a streak (repeatEnd true/1); a non-streakable gift (type ≠ 1) always counts,
+//                 whatever its repeatEnd says, as in LiveEvents.ingest;
 //                 diamonds = diamondCount × repeatCount; dedupe_key gift:<transactionId|orderId|logId|msgId> or
 //                 gift:<userId>:<giftId>:<timestamp>
 //   like          one event per user per 5 s window: { user, count, total_like_count, window_ms }
 //   member        viewer joined · chat { user, text } · follow / share { user }
 //   viewers       from roomUser: { viewer_count, top_viewers:[{ user, coins, rank }] }
 //   battle        from linkMicBattle (phase 'status': action, start/end, participants, results) and linkMicArmies
-//                 (phase 'scores': per-host score + top contributors)
+//                 (phase 'scores': per-host score + top contributors); from managedBattle (the Tik.Tools provider's
+//                 projection of battle/battleArmies, lib/tiktools-events.mjs) as phase 'managed': status, times, scores
 //   session_start / session_end   connect / disconnect of the LiveEvents connection
 import fs from 'node:fs';
 import path from 'node:path';
@@ -48,7 +50,7 @@ export function mapEvent(type,data={},{now=Date.now()}={}){
   if(type==='gift'){
     const gift=data.gift||data.extendedGiftInfo||{};
     const streakable=number(gift.type??data.giftType??gift.gift_type)===1,ended=data.repeatEnd===true||number(data.repeatEnd)===1;
-    if(data.repeatEnd===false||(streakable&&!ended))return[]; // streak still running: its last message carries the total
+    if(streakable&&!ended)return[]; // streak still running: its last message carries the total (same rule as LiveEvents.ingest)
     const giftId=str(data.giftId??gift.id),count=Math.max(1,Math.min(100000,number(data.repeatCount)||1)),each=Math.max(0,number(gift.diamondCount??data.diamondCount));
     const tx=str(data.transactionId||data.orderId||data.logId||id);
     return[event('gift',ts,'gift:'+(tx||self+':'+giftId+':'+ts),{gift_id:giftId,gift_name:str(gift.name??data.giftName)||giftId,diamond_count:each,repeat_count:count,diamonds:each*count,user:who,msg_id:id||null})];
@@ -72,6 +74,11 @@ export function mapEvent(type,data={},{now=Date.now()}={}){
     const battleId=str(data.battleId),entries=Array.isArray(data.armies)?data.armies:Object.entries(data.armies||{}).map(([key,value])=>({key,value}));
     const scores=entries.map(a=>{const v=a?.value||a||{};return{id:str(a?.key??v.anchorIdStr??v.hostUserId??v.userId),score:number(v.hostscore??v.score??v.totalScore??v.points??v.battlePoints),contributors:list(v.userArmies,v.users,v.contributors).slice(0,10).map(u=>({...person(u?.user||u),score:number(u?.score??u?.points)}))};});
     return[event('battle',ts,`battle:${battleId}:`+(id||'scores:'+ts),{battle_id:battleId,phase:'scores',reason:number(data.triggerReason)||null,total_diamonds:number(data.totalDiamondCount)||null,scores})];
+  }
+  if(type==='managedBattle'){ // Tik.Tools provider: battle/battleArmies already projected by managedBattle()
+    const b=data.battle||{};if(!b.id)return[];
+    const scores=(Array.isArray(b.scores)?b.scores:[]).map(s=>({id:str(s?.id),score:number(s?.score),members:(Array.isArray(s?.members)?s.members:[]).slice(0,20).map(m=>str(m)),contributors:(Array.isArray(s?.contributors)?s.contributors:[]).slice(0,10).map(c=>({id:str(c?.id),handle:str(c?.handle),name:str(c?.name),score:number(c?.score)}))}));
+    return[event('battle',ts,`battle:${b.id}:`+(id||'managed:'+(toMs(b.serverTsMs)||ts)),{battle_id:str(b.id),phase:'managed',status:str(b.status),start_time:toMs(b.startTimeMs)?iso(toMs(b.startTimeMs)):null,end_time:toMs(b.endTimeMs)?iso(toMs(b.endTimeMs)):null,duration:number(b.duration)||null,scores})];
   }
   return[];
 }

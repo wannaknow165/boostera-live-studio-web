@@ -32,7 +32,8 @@ export const TIMING = Object.freeze({
   disconnectGraceMs: 4000,   // 'disconnected' this long -> recover
   echoStaleMs: 5000,         // program echo older than this while the program is online -> recover
   flatMs: 5000,              // outbound bytesSent flat this long -> recover
-  notMineGraceMs: 3000,      // status says "not mine" this long -> recover (a restarted gateway re-adopts within ~1 s)
+  notMineGraceMs: 3000,      // status says "not mine" this long, with the program page online -> recover (a restarted gateway
+                             // re-adopts the link from the page's first echo, about a second after the page found it again)
   stableMs: 10000,           // a link that lived this long restarts the delays at 0
   muteGraceMs: 1000,         // a track muted this long while the page is visible -> re-acquire it
   reacquireMaxMs: 15000,     // cap for re-acquire retries
@@ -45,7 +46,8 @@ export const TIMING = Object.freeze({
 });
 
 export const LEVEL_SEEN_MIN = 0.001; // an audio level above this counts as "sound arrived" (digital silence is exactly 0)
-const MIN_FPS = 15;
+const MIN_FPS = 15;   // the pill turns green at this many frames a second on the program page…
+const LEAVE_FPS = 10; // …and, once green, leaves it only below this on two statuses in a row (a camera in a dim room hovers around 15)
 const KINDS = ['video', 'audio'];
 const CODE = /^[A-Z0-9_]{1,40}$/;
 const RESOURCE = /^\/api\/link\/whip\/[A-Za-z0-9_-]{1,100}$/;
@@ -85,6 +87,19 @@ export const TEXT = Object.freeze({
   stopYes: 'עצרי מצלמה',
   stopNo: 'המשיכי',
   retry: 'נסי שוב',
+});
+
+// Strings the specification does not list. They exist for two things it does not cover: pairing from this page (over
+// `adb reverse` the phone counts as "this computer" at /mobile/, which then shows no pairing form at all) and the screen
+// reader's name of the mute button (pressed = muted).
+export const EXTRA_TEXT = Object.freeze({
+  pairLabel: 'קוד השיוך מהאולפן (8 ספרות)',
+  pairGo: 'שייכי את הטלפון',
+  pairBad: 'הקוד שגוי או שפג תוקפו. בקשי קוד חדש מהאולפן.',
+  pairWait: 'יותר מדי ניסיונות. חכי דקה ונסי שוב.',
+  pairFailed: 'השיוך לא הצליח. נסי שוב.',
+  pairLink: 'לשיוך הטלפון',
+  micLabel: 'השתקת מיקרופון',
 });
 
 // States that have no camera running show a card with this text (and one action).
@@ -249,7 +264,7 @@ export function readStats(report) {
  * The truthful pill. Green only on what the PROGRAM reports: a fresh echo, enough frames and (when it plays audio)
  * sound that is playing with a level seen lately. tone: idle | busy | ok | warn | bad.
  */
-export function derivePill({ state, status = null, control = 'ok', levelFresh = false, airFresh = true } = {}) {
+export function derivePill({ state, status = null, control = 'ok', levelFresh = false, airFresh = true, micMuted = false, fpsOk = null } = {}) {
   // the "on air" badge is a second, independent truth: TikTok is live (from the gateway's real event connection)
   const pill = (tone, text, sub = '') => ({ tone, text, sub, air: airFresh && status?.air?.live === true });
   switch (state) {
@@ -266,9 +281,12 @@ export function derivePill({ state, status = null, control = 'ok', levelFresh = 
   const link = status.link;
   // "connected" is the program's own word: its engine is ready and frames are being shown (while it still loads, the
   // hub says "negotiating" although packets already arrive)
-  const seen = link.state === 'connected' && link.mine && link.echoAgeMs !== null && link.echoAgeMs < TIMING.echoFreshMs && link.stats.fps >= MIN_FPS;
+  // fpsOk: the caller's memory of "enough frames" (see CamLink.noteFps); without one, this status alone decides
+  const frames = fpsOk === null ? link.stats.fps >= MIN_FPS : fpsOk === true;
+  const seen = link.state === 'connected' && link.mine && link.echoAgeMs !== null && link.echoAgeMs < TIMING.echoFreshMs && frames;
   if (!seen) return pill('busy', TEXT.connecting);
   if (!link.audio.wanted) return pill('ok', TEXT.seen, TEXT.audioOffTest);
+  if (micMuted) return pill('ok', TEXT.seen, TEXT.micMuted); // she muted it herself: silence is what she asked for, not a fault of the studio
   return link.audio.playing && levelFresh ? pill('ok', TEXT.seenHeard) : pill('warn', TEXT.seenNotHeard);
 }
 
@@ -344,6 +362,8 @@ export class CamLink {
     this.status = null;
     this.lastStatusOkAt = 0;
     this.levelSeenAt = null;
+    this.fpsOk = false; // "the program shows enough frames", with hysteresis (noteFps)
+    this.fpsLow = 0;
     this.stats = { w: 0, h: 0, fps: 0, kbps: 0, rttMs: 0, lossPct: 0, codec: '', encoder: '', limit: '', path: null };
     this.ticks = 0;
     this.statusBusy = false;
@@ -387,7 +407,7 @@ export class CamLink {
       status: this.status,
       stats: { ...this.stats },
       pcState: this.current?.pc?.connectionState || this.pending?.pc?.connectionState || '',
-      pill: derivePill({ state, status: this.status, control, levelFresh, airFresh }),
+      pill: derivePill({ state, status: this.status, control, levelFresh, airFresh, micMuted: this.micMuted, fpsOk: this.fpsOk }),
     };
   }
 
@@ -458,6 +478,28 @@ export class CamLink {
     }
     this.update();
     return this.snapshot();
+  }
+
+  /**
+   * Pairing from this page: the 8-digit code the studio PC shows (at /mobile/pair) goes to the gateway's own pairing route,
+   * which sets the session cookie. Resolves { ok } or { ok:false, error }. It never touches media: with no camera running
+   * the notice gives way to the start card; in the middle of a recovery (the pairing ran out while she was live) the next
+   * offer goes out at once.
+   */
+  async pair(code, deviceLabel = '') {
+    const digits = String(code ?? '').replace(/\D/g, '');
+    if (digits.length !== 8) return { ok: false, error: 'INVALID_PAIRING_CODE' };
+    let res;
+    try { res = await this.http('/api/mobile/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: digits, label: label(deviceLabel) }) }); }
+    catch { return { ok: false, error: 'PAIR_UNREACHABLE' }; }
+    if (!res.ok) {
+      let error = '';
+      try { error = String((await res.json())?.error || ''); } catch { /* not JSON */ }
+      return { ok: false, error: CODE.test(error) ? error : 'PAIR_HTTP_' + res.status };
+    }
+    if (this.halted) await this.preflight();
+    else { this.error = null; this.retry(); }
+    return { ok: true };
   }
 
   destroy() { for (const off of this.unbinders.splice(0)) off(); }
@@ -531,7 +573,17 @@ export class CamLink {
     this.status = status;
     this.lastStatusOkAt = now;
     if (status.link.mine && status.link.audio.level >= LEVEL_SEEN_MIN) this.levelSeenAt = now;
+    this.noteFps(status.link);
     return status;
+  }
+
+  /** Green needs 15 frames a second; once green it is left only below 10 on two statuses in a row, so a rate that hovers around 15 does not flicker. */
+  noteFps(link) {
+    const fps = link.stats.fps;
+    if (!link.mine || link.state !== 'connected') { this.fpsOk = false; this.fpsLow = 0; }
+    else if (fps >= MIN_FPS) { this.fpsOk = true; this.fpsLow = 0; }
+    else if (fps >= LEAVE_FPS) this.fpsLow = 0;
+    else if (++this.fpsLow >= 2) this.fpsOk = false;
   }
 
   // ---- wake lock ---------------------------------------------------------------------------------------------
@@ -637,6 +689,7 @@ export class CamLink {
     this.reacquiring = true;
     this.cancel('capture');
     const epoch = this.epoch;
+    let denied = null;
     try {
       const constraints = {};
       if (kinds.includes('video')) constraints.video = videoConstraints();
@@ -654,9 +707,15 @@ export class CamLink {
         try { old?.stop(); } catch { /* already ended */ }
         if (kind === 'video') emit(this.onPreview, next);
       }
-    } catch { /* another app may still hold the camera: evaluateCapture() looks again after the delay below */ }
+    } catch (e) { // another app may still hold the camera: evaluateCapture() looks again after the delay below
+      if (DENIED.includes(e?.name)) denied = codeOf(e, snake(e?.name) || 'CAMERA_DENIED');
+    }
     finally { this.reacquiring = false; }
     if (epoch !== this.epoch || this.halted) return;
+    // The permission itself is gone (she revoked it in the site settings, or the browser withdrew it): trying again cannot
+    // help and she has to be told. At once when nothing is left to send; on the second refusal in a row when the other
+    // track still flows (one refusal can be a passing "not now" of the browser, and that track is worth keeping).
+    if (denied && (!this.hasTracks() || kinds.some(kind => this.cure[kind] >= 1))) { this.giveUp('denied', denied); return; }
     // 1, 2, 4, 8, 15 s between tries for as long as that kind stays broken (a healthy track resets it)
     const now = this.now();
     for (const kind of kinds) this.notBefore[kind] = now + Math.min(TIMING.reacquireMaxMs, 1000 * 2 ** this.cure[kind]++);
@@ -689,6 +748,14 @@ export class CamLink {
     return this.snapshot();
   }
 
+  /** The same in the middle of a session: everything is released, the notice is shown, and the hub is told to let the link go. */
+  giveUp(phase, code) {
+    const target = this.pending?.posted ? this.pending : this.current;
+    const resource = target ? target.location || '/api/link/whip/' + target.id : null;
+    this.refuse(phase, code);
+    if (resource) void this.control(resource, { method: 'DELETE' });
+  }
+
   /** Everything off: timers, requests, connections, tracks, wake lock. Nothing is sent to the hub from here. */
   halt() {
     ++this.epoch;
@@ -706,6 +773,7 @@ export class CamLink {
     }
     this.stream = null;
     this.reportedKey = '';
+    this.fpsOk = false; this.fpsLow = 0;
     this.releaseWakeLock();
     this.resetLinkHealth();
     emit(this.onPreview, null);
@@ -948,11 +1016,22 @@ export class CamLink {
   }
 
   onStatus(status) {
-    if (this.halted || !this.current || this.recovery) return;
+    if (this.halted || !this.current) return;
     const now = this.now(), link = status.link;
+    if (this.recovery) {
+      // The hub's own word started this recovery, and the hub has taken it back before any new offer left the phone (a
+      // restarted gateway has adopted the running link from the program page's echo): there is nothing to replace.
+      const fresh = link.echoAgeMs !== null && link.echoAgeMs <= TIMING.echoStaleMs;
+      if (!this.recovery.offerSent && ['LINK_NOT_MINE', 'ECHO_STALE'].includes(this.recovery.reason) && link.mine && link.state === 'connected' && fresh
+        && this.current.pc?.connectionState === 'connected') this.heal();
+      return;
+    }
     if (!link.mine) {
       // "lost" and not mine: the hub knows this link is over (the program page was reloaded or gave it up) -> offer again now
       if (link.state === 'lost') { this.recover('LINK_LOST'); return; }
+      // a restarted gateway knows nothing until the program page has found it again (its next poll), and only then can the
+      // page's echo let it adopt this link: the clock starts when the program is online, not at the gateway's first answer
+      if (!status.program.online) { this.notMineSince = null; return; }
       // otherwise another client holds the link, or the gateway restarted and re-adopts the link within a second or two
       this.notMineSince ??= now;
       if (now - this.notMineSince >= TIMING.notMineGraceMs) this.recover('LINK_NOT_MINE');
@@ -1022,7 +1101,9 @@ export function mountCamPage(g = globalThis, overrides = {}) { // overrides: now
   const $ = id => doc.getElementById(id);
   const query = new URLSearchParams(g.location?.search || '');
   const root = $('cam'), video = $('self');
-  let debug = query.get('debug') === '1', taps = [];
+  let debug = query.get('debug') === '1', taps = [], pairing = false, pairError = '';
+  const ua = String(g.navigator?.userAgent || '');
+  const device = (/iPad|iPhone|iPod/.test(ua) ? 'iPhone' : /Android/.test(ua) ? 'Android' : 'Browser') + ' cam'; // the name the operator sees for this phone
 
   const show = (id, visible) => { const el = $(id); if (el && el.hidden === visible) el.hidden = !visible; };
   const text = (id, value) => { const el = $(id); if (el && el.textContent !== value) el.textContent = value; };
@@ -1063,7 +1144,13 @@ export function mountCamPage(g = globalThis, overrides = {}) { // overrides: now
     text('notice-text', notice || '');
     show('retry', s.state === 'denied' || s.state === 'busy_camera');
     show('takeover', s.state === 'replaced');
-    show('pair-link', s.state === 'unpaired');
+    const unpaired = s.state === 'unpaired';
+    show('pair-box', unpaired);
+    show('pair-link', unpaired);
+    if (!unpaired) pairError = '';
+    show('pair-error', unpaired && Boolean(pairError));
+    text('pair-error', pairError);
+    $('pair-go').disabled = pairing;
     show('pill', Boolean(s.pill.text));
     $('pill').dataset.tone = s.pill.tone;
     text('pill-text', s.pill.text);
@@ -1073,9 +1160,11 @@ export function mountCamPage(g = globalThis, overrides = {}) { // overrides: now
     show('sending', camera); // fixed label while any track is live
     show('mic-muted', camera && s.micMuted);
     show('wake-hint', camera && (s.wakeLock === 'rejected' || s.wakeLock === 'unsupported'));
-    show('controls', camera);
+    // the controls belong to the session, not to the tracks: with both tracks ended (and being taken again) she can still stop
+    const controls = camera || !START_FROM.includes(s.state) && s.state !== 'acquiring';
+    show('controls', controls);
     $('mic').setAttribute('aria-pressed', String(s.micMuted));
-    if (!camera) show('confirm', false);
+    if (!controls) show('confirm', false);
     show('landscape', camera && landscape() && coarse()); // the stream continues underneath
     show('diag', debug);
     if (debug) {
@@ -1100,9 +1189,24 @@ export function mountCamPage(g = globalThis, overrides = {}) { // overrides: now
   $('retry').addEventListener('click', () => { void link.start(); });
   $('takeover').addEventListener('click', () => { void link.start({ takeover: true }); });
   $('mic').addEventListener('click', () => { link.toggleMic(); });
-  $('stop').addEventListener('click', () => show('confirm', true));
-  $('confirm-keep').addEventListener('click', () => show('confirm', false));
+  // the stop sheet is a dialog: focus goes into it, Escape closes it, and focus returns to the button that opened it
+  const closeConfirm = () => { if ($('confirm').hidden) return; show('confirm', false); $('stop').focus?.(); };
+  $('stop').addEventListener('click', () => { show('confirm', true); $('confirm-keep').focus?.(); });
+  $('confirm-keep').addEventListener('click', closeConfirm);
   $('confirm-stop').addEventListener('click', () => { show('confirm', false); void link.stop(); });
+  doc.addEventListener?.('keydown', event => { if (event?.key === 'Escape') closeConfirm(); });
+  // pairing from this page (no <form>: the page's policy is form-action 'none')
+  const pair = async () => {
+    if (pairing) return;
+    pairing = true; pairError = ''; rerender();
+    const result = await link.pair($('pair-code').value, device);
+    pairing = false;
+    if (result.ok) $('pair-code').value = '';
+    else pairError = result.error === 'TOO_MANY_ATTEMPTS' ? EXTRA_TEXT.pairWait : result.error === 'INVALID_PAIRING_CODE' ? EXTRA_TEXT.pairBad : EXTRA_TEXT.pairFailed;
+    rerender();
+  };
+  $('pair-go').addEventListener('click', () => { void pair(); });
+  $('pair-code').addEventListener('keydown', event => { if (event?.key === 'Enter') void pair(); });
   $('pill').addEventListener('click', () => { // five taps within 3 s open or close the diagnostics
     const now = Date.now();
     taps = taps.filter(at => now - at < 3000);

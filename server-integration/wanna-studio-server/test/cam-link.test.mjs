@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
-import { createCamLink, createGatewayCamLink, linkProgramKey, linkFileLog, parseIceServers, validSdp, LEASE_MS, ONLINE_GRACE_MS, OFFER_TTL_MS, HELD_MS, DISOWN_GRACE_MS, QUEUE_MAX, EVENTS_MAX, OFFERS_PER_MINUTE } from '../lib/cam-link.mjs';
+import { createCamLink, createGatewayCamLink, linkProgramKey, linkFileLog, parseIceServers, validSdp, LEASE_MS, ONLINE_GRACE_MS, OFFER_TTL_MS, HELD_MS, HOLDER_SILENT_MS, DISOWN_GRACE_MS, QUEUE_MAX, EVENTS_MAX, OFFERS_PER_MINUTE } from '../lib/cam-link.mjs';
 import { createMobileGateway } from '../mobile-gateway.mjs';
 
 const T0 = 1762000000000;
@@ -271,7 +271,8 @@ test('another client is refused with LINK_REPLACED while the link was connected 
   assert.equal((await done(s.answer('air', 'attempt-0004'))).status, 200); assert.equal((await done(s.report('air', 'attempt-0004', 'connected'))).status, 200);
   // a link the program has not called "connected" for 10 s is no longer held
   assert.equal((await done(s.report('air', 'attempt-0004', 'stalled'))).status, 200);
-  await s.c.advance(HELD_MS - 1); await page.pump(); assert.deepEqual((await done(s.whip({ attempt: 'attempt-0005', client: 'client-0001' }))).json, { error: 'LINK_REPLACED' });
+  await s.c.advance(HELD_MS - 1); await page.pump(); await done(s.status({ client: 'client-0002', attempt: 'attempt-0004' })); // (the holder's page is alive: it asks for its status)
+  assert.deepEqual((await done(s.whip({ attempt: 'attempt-0005', client: 'client-0001' }))).json, { error: 'LINK_REPLACED' });
   await s.c.advance(1); await page.pump();
   const free = await done(s.whip({ attempt: 'attempt-0005', client: 'client-0001' })); assert.equal(free.writableEnded, false);
 });
@@ -311,6 +312,103 @@ test('one offer in flight and ten offers a minute per identity', async () => {
   await s.c.advance(59999); await page.pump(); assert.equal((await done(s.whip({ attempt: 'attempt-0011' }))).status, 429);
   await s.c.advance(1); await page.pump();
   const later = await done(s.whip({ attempt: 'attempt-0012' })); assert.equal(later.writableEnded, false, 'a minute later the count is free again');
+});
+
+test('a link is also held while the page reports "loading" for it, and from a takeover for 10 s; "lost" and "stalled" never hold it', async () => {
+  const s = setup(), page = programPage(s, 'air'); await page.pump();
+  // phone A is linked while the program engine still loads: the page names the attempt and says "loading", never "connected"
+  const a = await done(s.whip({ attempt: 'attempt-000a', client: 'client-000a', session: PHONE_A })); await page.pump(); page.take();
+  assert.equal((await done(s.answer('air', 'attempt-000a'))).status, 200); assert.equal(a.status, 201);
+  assert.equal((await done(s.report('air', 'attempt-000a', 'loading'))).status, 200); assert.equal(s.view().link.state, 'negotiating');
+  const b = await done(s.whip({ attempt: 'attempt-000b', client: 'client-000b', session: PHONE_B }));
+  assert.deepEqual([b.status, b.json], [409, { error: 'LINK_REPLACED' }], 'another phone needs the takeover header although the page never said "connected"');
+  // B presses "bring it back here": from that moment B holds the link, before the page has said a word about B's attempt
+  const taken = await done(s.whip({ attempt: 'attempt-000c', client: 'client-000b', session: PHONE_B, takeover: true })); assert.equal(taken.writableEnded, false);
+  const retry = await done(s.whip({ attempt: 'attempt-000d', client: 'client-000a', session: PHONE_A }));
+  assert.deepEqual([retry.status, retry.json], [409, { error: 'LINK_REPLACED' }], 'the displaced phone\'s automatic offer does not take a waiting takeover back'); assert.equal(taken.writableEnded, false);
+  await page.pump(); page.take(); assert.equal((await done(s.answer('air', 'attempt-000c'))).status, 200); assert.equal(taken.status, 201);
+  assert.equal((await done(s.report('air', 'attempt-000c', 'loading'))).status, 200);
+  await s.c.advance(HELD_MS - 1); assert.equal((await done(s.report('air', 'attempt-000c', 'loading'))).status, 200); // 10 s after the takeover: only the "loading" reports hold it now
+  await s.c.advance(HELD_MS - 1);
+  assert.deepEqual((await done(s.whip({ attempt: 'attempt-000e', client: 'client-000a', session: PHONE_A }))).json, { error: 'LINK_REPLACED' }, 'the page still holds B\'s connection while it loads');
+  assert.equal(s.logged.filter(e => e.type === 'replaced').length, 1, 'the link changed hands once, not back and forth');
+  // a holder the page reports as lost or stalled is not protected: 10 s after its last good report anybody may offer
+  assert.equal((await done(s.report('air', 'attempt-000c', 'lost'))).status, 200);
+  await s.c.advance(HELD_MS - 1); await page.pump(); assert.equal((await done(s.report('air', 'attempt-000c', 'stalled'))).status, 200);
+  await s.c.advance(1); await page.pump();
+  const free = await done(s.whip({ attempt: 'attempt-000f', client: 'client-000a', session: PHONE_A })); assert.equal(free.writableEnded, false, 'a dead holder can be replaced without the button');
+  // a takeover whose phone hung up while it waited holds nothing
+  await page.pump(); page.take(); await done(s.stop('attempt-000f', { session: PHONE_A })); await page.pump();
+  const gone = await done(s.whip({ attempt: 'attempt-000g', client: 'client-000b', session: PHONE_B, takeover: true })); gone.leave(); await s.c.settle();
+  const next = await done(s.whip({ attempt: 'attempt-000h', client: 'client-000a', session: PHONE_A })); assert.equal(next.writableEnded, false);
+});
+
+test('an offer whose phone hung up while it waited does not block that phone\'s next offer', async () => {
+  const s = setup(), page = programPage(s, 'air'); await page.pump();
+  const cut = await done(s.whip({ attempt: 'attempt-0001', client: 'client-0001' })); await page.pump();
+  assert.deepEqual(page.take().map(m => [m.type, m.attempt]), [['offer', 'attempt-0001']]);
+  assert.deepEqual((await done(s.whip({ attempt: 'attempt-0002', client: 'client-0001' }))).json, { error: 'OFFER_IN_FLIGHT' }, 'while the first request is still open: one offer in flight');
+  cut.leave(); await s.c.settle(); // the phone\'s network dropped: nobody waits for that answer any more
+  const again = await done(s.whip({ attempt: 'attempt-0003', client: 'client-0001' })); assert.equal(again.writableEnded, false, 'the next offer is taken at once, not after the dead one timed out');
+  assert.equal(cut.headersSent, false, 'nothing is written to the request that is gone');
+  await page.pump();
+  assert.deepEqual(page.take().map(m => [m.type, m.attempt, m.reason]), [['stop', 'attempt-0001', 'replaced'], ['offer', 'attempt-0003', undefined]], 'the page is told to drop the dead attempt before it gets the new offer');
+  assert.deepEqual((await done(s.answer('air', 'attempt-0001'))).json, { error: 'STALE_ATTEMPT' });
+  assert.equal((await done(s.answer('air', 'attempt-0003'))).status, 200); assert.equal(again.status, 201);
+  assert.equal(s.c.pending, 1, 'only the parked poll is left: the dead attempt\'s timer went with it');
+});
+
+test('the same paired phone with a new page needs no takeover once its old page has gone quiet; a page that is alive keeps the link', async () => {
+  const s = setup(), page = programPage(s, 'air');
+  await connect(s, page, { attempt: 'attempt-0001', client: 'client-0001' }); page.take();
+  // the old page lives: it asks for its status every second. A second tab of the same phone is another client.
+  await s.c.advance(1000); await page.pump(); await done(s.status({ client: 'client-0001', attempt: 'attempt-0001' })); await done(s.report('air', 'attempt-0001', 'connected'));
+  await s.c.advance(HOLDER_SILENT_MS - 1); await page.pump();
+  assert.deepEqual((await done(s.whip({ attempt: 'attempt-0002', client: 'client-0002' }))).json, { error: 'LINK_REPLACED' }, 'heard from the holder under 3 s ago');
+  // the browser was killed (no bye): nothing more from client-0001. She opens the page again and taps, well inside the 10 s
+  await s.c.advance(1); await done(s.report('air', 'attempt-0001', 'connected'));
+  const other = await done(s.whip({ attempt: 'attempt-0003', client: 'client-0003', session: PHONE_B }));
+  assert.deepEqual(other.json, { error: 'LINK_REPLACED' }, 'another paired phone still needs the button');
+  const back = await done(s.whip({ attempt: 'attempt-0004', client: 'client-0004' })); assert.equal(back.writableEnded, false, 'her own new page does not');
+  await page.pump(); assert.deepEqual(page.take().map(m => [m.type, m.attempt, m.reason]), [['stop', 'attempt-0001', 'replaced'], ['offer', 'attempt-0004', undefined]]);
+  // LINK_DEV: every local caller shares one identity, so only the client id tells two pages apart
+  const d = setup({ env: { LINK_DEV: '1' } }), dpage = programPage(d, 'air'); await dpage.pump();
+  const local = (attempt, client) => send(d.hub, 'POST', '/api/link/whip', { local: true, body: OFFER, headers: { host: '127.0.0.1:8801', 'content-type': 'application/sdp', 'x-link-client': client, 'x-link-attempt': attempt } });
+  const first = await done(local('attempt-0001', 'client-0001')); await dpage.pump(); dpage.take();
+  assert.equal((await done(d.answer('air', 'attempt-0001'))).status, 200); assert.equal(first.status, 201); assert.equal((await done(d.report('air', 'attempt-0001', 'connected'))).status, 200);
+  await d.c.advance(HOLDER_SILENT_MS + 2000); await dpage.pump();
+  assert.deepEqual((await done(local('attempt-0002', 'client-0002'))).json, { error: 'LINK_REPLACED' }, 'in development mode a quiet holder is still another client');
+});
+
+test('two windows opened with the same page id are two pages: the newer one with takeover=1 wins and the older one stops for good', async () => {
+  const s = setup(), poll = (inst, after = 0, takeover = 1) => s.page('GET', `poll?program=air&inst=${inst}&after=${after}${takeover ? '&takeover=1' : ''}`);
+  const first = await done(poll('load-0001')); assert.equal(first.writableEnded, false);
+  const again = await done(poll('load-0001')); assert.equal(first.status, 204, 'the same window polling again only replaces its own poll'); assert.equal(again.writableEnded, false);
+  // a link on window 1
+  const w = await done(s.whip({ attempt: 'attempt-0001', client: 'client-0001' })); assert.equal(again.status, 200);
+  const state = (inst, attempt, word) => s.page('POST', 'state', { json: { program: 'air', inst, attempt, state: word, showing: 'slate', stats: GOOD_STATS, hidden: false, audio: {}, path: null } });
+  assert.equal((await done(s.page('POST', 'answer', { json: { program: 'air', inst: 'load-0001', attempt: 'attempt-0001', sdp: ANSWER } }))).status, 200); assert.equal(w.status, 201);
+  assert.equal((await done(state('load-0001', 'attempt-0001', 'connected'))).status, 200); assert.equal(s.view().link.state, 'connected');
+  const parked = await done(poll('load-0001', again.json.seq));
+  // a second window with the same address but no takeover is simply busy, and can neither report nor answer nor say bye for the first
+  assert.deepEqual((await done(poll('load-0002', 0, 0))).json, { error: 'PROGRAM_BUSY' }); assert.equal(parked.writableEnded, false);
+  assert.deepEqual((await done(state('load-0002', null, 'idle'))).json, { error: 'PROGRAM_BUSY' }); assert.equal(s.view().link.state, 'connected', 'its "idle" does not end the first window\'s link');
+  assert.deepEqual((await done(s.page('POST', 'answer', { json: { program: 'air', inst: 'load-0002', attempt: 'attempt-0001', sdp: ANSWER } }))).json, { error: 'STALE_ATTEMPT' });
+  assert.equal((await done(s.page('POST', 'bye?program=air&inst=load-0002'))).status, 200); assert.equal(s.view().program.online, true, 'and closing it releases nothing');
+  // the launcher's address carries takeover=1: the second window takes the slot, the first is told to stop for good, the link is over at once
+  const taker = await done(poll('load-0002')); assert.equal(taker.writableEnded, false);
+  assert.deepEqual([parked.status, parked.json], [410, { error: 'PROGRAM_SUPERSEDED' }]);
+  assert.deepEqual([s.view().link.state, s.view().link.lastError], ['lost', 'PROGRAM_SUPERSEDED']);
+  assert.deepEqual((await done(state('load-0001', 'attempt-0001', 'connected'))).json, { error: 'PROGRAM_BUSY' }, 'the older window no longer reports');
+  // the older window had no poll open when it was displaced (it was between two polls): it is told on its next one, even with takeover=1
+  const third = await done(poll('load-0003')); assert.equal(taker.status, 410); assert.equal(third.writableEnded, false);
+  await s.c.advance(25000); assert.equal(third.status, 204);
+  const fourth = await done(poll('load-0004')); assert.equal(fourth.writableEnded, false);
+  assert.deepEqual((await done(poll('load-0003'))).json, { error: 'PROGRAM_SUPERSEDED' }); assert.equal(fourth.writableEnded, false, 'and the newest window keeps the slot');
+  for (const bad of ['a b', 'x'.repeat(41), '<i>']) assert.deepEqual((await done(s.page('GET', 'poll?program=air&inst=' + encodeURIComponent(bad)))).json, { error: 'PROGRAM_INVALID' });
+  // a page that sends no inst (an older page) is known by its page id alone, as before
+  await done(s.page('POST', 'bye?program=air&inst=load-0004'));
+  const old = await done(s.poll('air')), old2 = await done(s.poll('air')); assert.equal(old.status, 204); assert.equal(old2.writableEnded, false);
 });
 
 test('status gives numbers within bounds and fixed words only: nothing the program page says reaches a phone as text', async () => {

@@ -1,12 +1,15 @@
 // CAM LINK v1 — operator page (spec section 9). The gateway serves /cam/ops and GET /api/link/ops to loopback only.
 // Polls GET /api/link/ops every second and shows what the program window and the link are really doing.
-// Two red banners: AUDIO OFF (a link is connected and the program does not play her voice) and the program window
-// being throttled / hidden or smaller than 720x1280 CSS px. Everything is written with textContent.
+// Red banners: AUDIO OFF (a link is connected and the program does not play her voice), OUTPUT DEVICE NOT FOUND (before
+// anybody is connected: the window was opened with sink= and that output is not there, so her voice WILL be silent) and
+// the program window being throttled / hidden or smaller than 720x1280 CSS px. Everything is written with textContent.
 //
 // opsView() is pure and has no DOM access (tested in test/cam-client.test.mjs); the page part runs only in a browser.
 
 export const NEED = Object.freeze({ w: 720, h: 1280 });
 const POLL_MS = 1000;
+// why the page reports "no_sink", and the one-time step that cures the usual cause (LINK.md, "Audio output: one-time step")
+const NO_SINK = 'sink= matched no output device, or Chrome hides the device names: allow Microphone for the program page in the link profile (LINK.md), then restart the program window.';
 
 const num = v => { v = Number(v); return Number.isFinite(v) ? v : 0; };
 const first = (...values) => values.find(v => v !== undefined && v !== null);
@@ -28,6 +31,8 @@ export function opsView(data) {
   const o = data && typeof data === 'object' ? data : {};
   const program = o.program || {}, link = o.link || {}, stats = link.stats || {}, pstats = program.stats || {};
   const audio = link.audio || program.audio || {}, path = link.path || null, air = o.air || {}, build = o.build || {}, lease = o.lease || {};
+  // the output device: what this link plays on, else what the program page found for the next link (it looks at start-up)
+  const sink = audio.sink || program.audio?.sink || '';
   const capture = link.capture || o.capture || null, now = num(first(o.serverTime, 0));
   const pick = key => first(stats[key], pstats[key], program[key]);
   const vw = num(first(pick('vw'), program.viewport?.w)), vh = num(first(pick('vh'), program.viewport?.h)), dpr = num(first(pick('dpr'), program.viewport?.dpr));
@@ -39,8 +44,12 @@ export function opsView(data) {
       id: 'audio', text: 'AUDIO OFF',
       detail: audio.wanted !== true
         ? 'The program window was opened without audio (desk mode): her voice is NOT going out.'
-        : 'Audio is wanted but is not playing' + (audio.sink ? ' (sink: ' + txt(audio.sink, 40) + ')' : '') + '.',
+        : 'Audio is wanted but is not playing' + (sink ? ' (sink: ' + txt(sink, 40) + ')' : '') + '.' + (sink === 'no_sink' ? ' ' + NO_SINK : ''),
     });
+  }
+  // no link yet, and the output named with sink= is already known to be missing: say it BEFORE she is on camera
+  if (online && !connected && program.audio?.wanted === true && program.audio?.sink === 'no_sink') {
+    banners.push({ id: 'sink', text: 'OUTPUT DEVICE NOT FOUND', detail: 'Her voice will be silent. ' + NO_SINK });
   }
   const small = online && vw > 0 && vh > 0 && (vw < NEED.w || vh < NEED.h);
   if (online && (program.throttled === true || small)) {
@@ -76,7 +85,7 @@ export function opsView(data) {
       ['jitter', pick('jitterMs') === undefined ? '—' : num(pick('jitterMs')) + ' ms'],
     ] },
     { id: 'audio', title: 'Audio', tone: !connected ? 'off' : audio.wanted === true && audio.playing === true ? 'ok' : 'bad', level: Math.min(1, Math.max(0, num(audio.level))), rows: [
-      ['wanted', yes(audio.wanted)], ['playing', yes(audio.playing)], ['level', num(audio.level).toFixed(3)], ['sink', txt(audio.sink || '—', 40)],
+      ['wanted', yes(audio.wanted)], ['playing', yes(audio.playing)], ['level', num(audio.level).toFixed(3)], ['sink', txt(sink || '—', 40)],
     ] },
     { id: 'air', title: 'TikTok (air)', tone: air.live === true ? 'ok' : 'off', rows: [['event connection known', yes(air.known)], ['live', yes(air.live)]] },
     { id: 'build', title: 'Build', tone: 'off', rows: [

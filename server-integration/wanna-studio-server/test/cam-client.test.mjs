@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { CamLink, TEXT, NOTICE, TIMING, sortCodecs, mungeAnswer, limitCandidates, derivePill, normalizeStatus, readStats, videoConstraints, audioConstraints, linkHeaders, mountCamPage } from '../public/cam/cam-link.js';
+import { CamLink, TEXT, EXTRA_TEXT, NOTICE, TIMING, sortCodecs, mungeAnswer, limitCandidates, derivePill, normalizeStatus, readStats, videoConstraints, audioConstraints, linkHeaders, mountCamPage } from '../public/cam/cam-link.js';
 import { opsView } from '../public/cam/ops.js';
 
 const T0 = 1762000000000; // fixed "now" for the fake clock
@@ -178,7 +178,7 @@ const linked = (over = {}) => statusBody({
 function fakeApi(c) {
   const calls = [];
   const api = {
-    calls, linked: false, status: null, whip: [], answer: ANSWER_H264, stateFail: null,
+    calls, linked: false, status: null, whip: [], pair: [], answer: ANSWER_H264, stateFail: null,
     of: (method, path) => calls.filter(x => x.method === method && (path instanceof RegExp ? path.test(x.path) : x.path === path)),
   };
   const reply = (status, body, headers = {}) => ({
@@ -205,6 +205,12 @@ function fakeApi(c) {
       return reply(r.http, { error: r.error });
     }
     if (call.method === 'POST' && call.path === '/api/link/state') { if (api.stateFail) throw api.stateFail; return reply(200, { ok: true }); }
+    if (call.method === 'POST' && call.path === '/api/mobile/pair') { // the gateway's own pairing route (it sets the session cookie)
+      const r = api.pair.length ? api.pair.shift() : 200;
+      if (r instanceof Error) throw r;
+      if (r === 200) { api.status = null; return reply(200, { ok: true, device: { id: 'abc123', label: 'x' } }); }
+      return typeof r.body === 'string' ? reply(r.http, r.body) : reply(r.http, { error: r.error });
+    }
     if (call.method === 'DELETE' && /^\/api\/link\/whip\/[\w-]+$/.test(call.path)) return reply(200, { ok: true });
     if (call.method === 'POST' && /^\/api\/link\/whip\/[\w-]+\/bye$/.test(call.path)) return reply(200, { ok: true });
     return reply(404, { error: 'NOT_FOUND' });
@@ -516,6 +522,147 @@ test('a phone that is not paired (401) is told so; a check before any tap avoids
   down.api.status = new Error('offline');
   await down.link.preflight();
   assert.equal(down.link.state, 'idle', 'an unreachable gateway is reported only after the tap');
+});
+
+test('pairing from the page: the 8-digit code goes to the gateway\'s pairing route; then the start card, or the next offer of a running recovery', async () => {
+  const h = rig();
+  h.api.status = { http: 401, error: 'PAIRING_REQUIRED' };
+  await h.link.preflight(); assert.equal(h.link.state, 'unpaired');
+  assert.deepEqual(await h.link.pair('1234'), { ok: false, error: 'INVALID_PAIRING_CODE' }, 'not 8 digits: nothing is sent');
+  assert.equal(h.api.of('POST', '/api/mobile/pair').length, 0);
+  h.api.pair.push({ http: 401, error: 'INVALID_PAIRING_CODE' }, { http: 429, error: 'TOO_MANY_ATTEMPTS' }, { http: 502, body: '<html>bad gateway</html>' }, new Error('offline'));
+  assert.deepEqual(await h.link.pair('12345678'), { ok: false, error: 'INVALID_PAIRING_CODE' });
+  assert.deepEqual(await h.link.pair('12345678'), { ok: false, error: 'TOO_MANY_ATTEMPTS' });
+  assert.deepEqual(await h.link.pair('12345678'), { ok: false, error: 'PAIR_HTTP_502' }, 'nothing free-form from a proxy page');
+  assert.deepEqual(await h.link.pair('12345678'), { ok: false, error: 'PAIR_UNREACHABLE' });
+  assert.equal(h.link.state, 'unpaired'); assert.equal(h.media.calls.length, 0, 'pairing never touches the camera');
+  assert.deepEqual(await h.link.pair(' 1234 5678 ', 'Android cam <b>'), { ok: true });
+  const sent = h.api.of('POST', '/api/mobile/pair').at(-1);
+  assert.deepEqual(JSON.parse(sent.body), { code: '12345678', label: 'Android cam b' }); assert.equal(sent.headers['Content-Type'], 'application/json');
+  assert.equal(h.link.state, 'idle', 'paired: the notice gives way to the start card');
+  assert.equal(h.c.pending, 0);
+
+  // the pairing ran out while she was live (12 h, or the gateway was restarted): the camera stays, and pairing again resumes the recovery
+  const live = rig();
+  const pc = await goLiveProven(live);
+  live.api.status = { http: 401, error: 'PAIRING_REQUIRED' };
+  pc.set('failed'); await live.c.settle();
+  assert.equal(live.link.state, 'unpaired'); assert.equal(live.camera().readyState, 'live', 'media is left alone'); assert.equal(live.whips().length, 1);
+  assert.deepEqual(await live.link.pair('87654321'), { ok: true }); await live.c.settle();
+  assert.equal(live.whips().length, 2, 'the next offer goes out at once'); assert.equal(live.camera().readyState, 'live');
+  live.api.linked = true; live.pcs.at(-1).set('connected'); await live.c.settle();
+  assert.equal(live.link.state, 'live');
+});
+
+test('a gateway restart: "not mine" is not counted before the program page is back, and a link the hub adopted again needs no new offer', async () => {
+  // the gateway is back as an empty process: status answers, but no program page has polled it yet -> nothing can have adopted the link
+  const h = rig();
+  const pc = await goLiveProven(h);
+  h.api.status = statusBody({ program: { online: false, ready: false } });
+  await h.c.advance(8000);
+  assert.equal(h.link.state, 'live'); assert.equal(h.pcs.length, 1, 'no recovery while the program is offline: the media still flows');
+  // the page found the gateway again (online); its echo, and with it the adoption, comes a moment later: 3 s of grace from here
+  h.api.status = statusBody({ program: { online: true, ready: false } });
+  await h.c.advance(2000); assert.equal(h.link.state, 'live');
+  h.api.status = null; // adopted: mine and connected again
+  await h.c.advance(10000);
+  assert.equal(h.link.state, 'live'); assert.equal(h.pcs.length, 1); assert.equal(h.whips().length, 1, 'the healthy connection was never replaced');
+  // online and still not mine after 3 s: somebody else holds the link -> the usual recovery
+  h.api.status = statusBody({ link: { state: 'connected', mine: false } });
+  await h.c.advance(4000);
+  assert.equal(h.link.snapshot().error, 'LINK_NOT_MINE'); assert.equal(h.pcs.length, 2);
+
+  // the recovery has started, the program was offline for its attempt, and the hub adopts the link before any offer left the phone
+  const late = rig();
+  const kept = await goLiveProven(late);
+  // (the heartbeat asks with the running attempt's id and sees the page online; the new attempt's own look a moment later finds it gone)
+  late.api.status = call => statusBody({ program: { online: call.query.attempt === 'id-2' } });
+  await late.c.advance(4000);
+  assert.equal(late.link.state, 'program_offline'); assert.equal(late.link.snapshot().error, 'PROGRAM_OFFLINE'); assert.equal(late.whips().length, 1, 'no offer was sent');
+  late.api.status = null; // the hub has adopted the running link: mine, connected, a fresh echo
+  await late.c.advance(1000);
+  assert.equal(late.link.state, 'live', 'healed by the hub\'s own word'); assert.equal(late.link.snapshot().error, null);
+  await late.c.advance(30000);
+  assert.equal(late.whips().length, 1, 'no offer follows'); assert.equal(kept.closed, false); assert.equal(late.pcs.filter(p => !p.closed).length, 1);
+
+  // …but a recovery that started from the phone's own evidence (nothing leaves it) is not called off by the hub's word
+  const flat = rig();
+  const dead = await goLiveProven(flat);
+  flat.api.whip.push(() => new Promise(() => {})); // the offer stays parked
+  dead.frozen = true; await flat.c.advance(6000);
+  assert.equal(flat.link.snapshot().error, 'BYTES_FLAT'); assert.equal(flat.link.state, 'recovering');
+  await flat.c.advance(3000); assert.equal(flat.link.state, 'recovering');
+});
+
+test('a permission that was taken away while live is said (the denied notice), not retried for ever behind an amber pill', async () => {
+  // both tracks ended and the permission is gone: nothing is left to send
+  const h = rig();
+  await goLiveProven(h);
+  const attempt = h.whips()[0].headers['X-Link-Attempt'];
+  h.media.script.push(domError('NotAllowedError'));
+  h.camera().stop(); h.mic().stop(); h.camera().emit('ended'); await h.c.settle();
+  assert.equal(h.link.state, 'denied'); assert.equal(h.link.snapshot().error, 'NOT_ALLOWED_ERROR');
+  assert.equal(NOTICE.denied, TEXT.denied);
+  assert.deepEqual(h.api.of('DELETE', /whip/).map(x => x.path), ['/api/link/whip/' + attempt], 'the hub is told to let the link go');
+  assert.equal(h.pcs[0].closed, true); assert.equal(h.c.pending, 0, 'no retry keeps running');
+  await h.link.start(); await h.c.settle(); assert.equal(h.link.state, 'connecting', '"try again" is a tap: the browser may ask her again');
+
+  // the camera is refused but the microphone still flows: one refusal can be a passing "not now"; the second one in a row is final
+  const half = rig();
+  const pc = await goLiveProven(half);
+  half.media.script.push(domError('NotAllowedError'), domError('NotAllowedError'));
+  half.camera().end(); await half.c.settle();
+  assert.equal(half.link.state, 'interrupted'); assert.equal(half.mic().readyState, 'live'); assert.equal(pc.closed, false);
+  await half.c.advance(1000);
+  assert.equal(half.link.state, 'denied'); assert.equal(half.mic().readyState, 'ended'); assert.equal(pc.closed, true);
+
+  // any other failure (another app holds the camera) keeps trying, as before
+  const busy = rig();
+  await goLiveProven(busy);
+  busy.media.script.push(domError('NotReadableError'), domError('NotReadableError'), domError('NotReadableError'));
+  busy.camera().end(); await busy.c.settle(); await busy.c.advance(3000);
+  assert.equal(busy.link.state, 'interrupted'); assert.equal(busy.media.calls.length, 4);
+  await busy.c.advance(4000); assert.equal(busy.link.state, 'live', 'the camera came back');
+});
+
+test('the pill: her own mute is not blamed on the studio, and a frame rate that hovers around 15 does not make it flicker', async () => {
+  const heard = { audio: { wanted: true, playing: true, level: 0 } };
+  const muted = (link, extra = {}) => derivePill({ state: 'live', status: normalizeStatus(linked({ link })), control: 'ok', micMuted: true, ...extra });
+  assert.deepEqual(muted(heard), { tone: 'ok', text: TEXT.seen, sub: TEXT.micMuted, air: false }, 'seen, and the second line says why she is not heard');
+  assert.deepEqual(muted(heard, { levelFresh: true }), { tone: 'ok', text: TEXT.seen, sub: TEXT.micMuted, air: false }, 'never "seen and heard" beside a muted microphone');
+  assert.deepEqual(muted({}), { tone: 'ok', text: TEXT.seen, sub: TEXT.audioOffTest, air: false }, 'the studio plays no sound at all: that is still the thing to know');
+  assert.equal(muted({ ...heard, echoAgeMs: 4000 }).text, TEXT.connecting, 'muted or not, green needs a fresh echo');
+  // through the client
+  const h = rig();
+  await goLive(h);
+  h.api.status = linked({ link: { audio: { wanted: true, playing: true, level: 0.3 } } });
+  await h.c.advance(1000); assert.equal(h.link.snapshot().pill.text, TEXT.seenHeard);
+  h.link.toggleMic();
+  assert.deepEqual([h.link.snapshot().pill.tone, h.link.snapshot().pill.text, h.link.snapshot().pill.sub], ['ok', TEXT.seen, TEXT.micMuted], 'at once, not after 5 s of silence');
+  h.api.status = linked({ link: { audio: { wanted: true, playing: true, level: 0 } } });
+  await h.c.advance(8000); assert.equal(h.link.snapshot().pill.text, TEXT.seen, 'and it never turns into "the studio does not play your voice"');
+  h.link.toggleMic(); await h.c.advance(1000);
+  assert.equal(h.link.snapshot().pill.text, TEXT.seenNotHeard, 'unmuted and no level for more than 5 s: now it is the truth');
+
+  // frames: green at 15 or more; once green, left only below 10 on two statuses in a row
+  const f = rig();
+  await goLive(f);
+  const at = fps => { f.api.status = linked({ link: { stats: { w: 720, h: 1280, fps, kbps: 900, rttMs: 4, lossPct: 0 } } }); return f.c.advance(1000).then(() => f.link.snapshot().pill.tone); };
+  assert.equal(await at(14), 'busy', 'never reached 15: not green (the spec\'s threshold)');
+  assert.equal(await at(15), 'ok');
+  for (const fps of [14, 15, 13, 16, 12, 10]) assert.equal(await at(fps), 'ok', 'hovering around 15 stays green: ' + fps);
+  assert.equal(await at(9), 'ok', 'one low reading is not enough');
+  assert.equal(await at(12), 'ok'); assert.equal(await at(9), 'ok');
+  assert.equal(await at(8), 'busy', 'below 10 twice in a row: she is not really seen');
+  assert.equal(await at(14), 'busy', 'and back only at 15');
+  assert.equal(await at(15), 'ok');
+  f.api.status = linked({ link: { state: 'stalled', stats: { w: 720, h: 1280, fps: 30, kbps: 900, rttMs: 4, lossPct: 0 } } });
+  await f.c.advance(1000); assert.equal(f.link.snapshot().pill.tone, 'busy');
+  assert.equal(await at(14), 'busy', 'a link that was not "connected" starts from the threshold again');
+  // the pure function without a memory decides on the status alone, as the spec writes it
+  assert.equal(derivePill({ state: 'live', status: normalizeStatus(linked({ link: { stats: { w: 1, h: 1, fps: 14, kbps: 1, rttMs: 1, lossPct: 0 } } })) }).tone, 'busy');
+  assert.equal(derivePill({ state: 'live', status: normalizeStatus(linked({ link: { stats: { w: 1, h: 1, fps: 14, kbps: 1, rttMs: 1, lossPct: 0 } } })), fpsOk: true }).tone, 'ok');
+  assert.equal(derivePill({ state: 'live', status: normalizeStatus(linked()), fpsOk: false }).tone, 'busy');
 });
 
 // ---- another device ------------------------------------------------------------------------------------------
@@ -1187,14 +1334,33 @@ test('the copy is exactly the spec (Hebrew, addressed to a woman) and the page c
   assert.equal(inside('stop'), TEXT.stopYes);
   assert.equal(inside('confirm-text'), TEXT.stopAsk); assert.equal(inside('confirm-stop'), TEXT.stopYes); assert.equal(inside('confirm-keep'), TEXT.stopNo);
   assert.equal(inside('landscape'), TEXT.landscape);
-  assert.match(html, /<a id="pair-link" class="button primary" href="\/mobile\/" hidden>/, 'the unpaired notice links to the pairing page');
+  assert.match(html, /<a id="pair-link" class="button" href="\/mobile\/" target="_blank" rel="noopener" hidden>/, 'the unpaired notice links to the pairing page, beside this page (it stays open and checks again on return)');
+  // strings the spec does not list: pairing from this page, and the screen reader's name of the mute button
+  assert.deepEqual({ ...EXTRA_TEXT }, {
+    pairLabel: 'קוד השיוך מהאולפן (8 ספרות)',
+    pairGo: 'שייכי את הטלפון',
+    pairBad: 'הקוד שגוי או שפג תוקפו. בקשי קוד חדש מהאולפן.',
+    pairWait: 'יותר מדי ניסיונות. חכי דקה ונסי שוב.',
+    pairFailed: 'השיוך לא הצליח. נסי שוב.',
+    pairLink: 'לשיוך הטלפון',
+    micLabel: 'השתקת מיקרופון',
+  });
+  assert.ok(html.includes('<label for="pair-code" class="pair-label">' + EXTRA_TEXT.pairLabel + '</label>'));
+  assert.equal(inside('pair-go'), EXTRA_TEXT.pairGo); assert.equal(inside('pair-link'), EXTRA_TEXT.pairLink);
+  assert.match(html, /<input id="pair-code"[^>]*inputmode="numeric"[^>]*maxlength="8"/); assert.doesNotMatch(html, /<form/, 'no form: the page policy is form-action none');
+  assert.ok(html.includes('aria-pressed="false" aria-label="' + EXTRA_TEXT.micLabel + '"'), 'pressed = muted, so the button is named for what pressing does');
+  for (const id of ['mic-muted', 'wake-hint', 'air']) assert.match(html, new RegExp('id="' + id + '"[^>]*role="status"'), id + ' is announced when it appears');
+  assert.match(html, /id="confirm" class="sheet" role="dialog" aria-modal="true"/);
+  assert.doesNotMatch(Object.values(EXTRA_TEXT).join(' '), /(^|[^א-ת])(הפעל|בדוק|עצור|פתח|סגור|נסה|לחץ|חבר|סובב|שייך|בקש|חכה|הקלד)([^א-ת]|$)/, 'no masculine imperatives');
   assert.doesNotMatch(Object.values(TEXT).flat().join(' ') + ' ' + html, /(^|[^א-ת])(הפעל|בדוק|עצור|פתח|סגור|נסה|לחץ|חבר|סובב)([^א-ת]|$)/, 'no masculine imperatives');
 });
 
 // ---- the page itself, on a fake DOM built from the ids in index.html ------------------------------------------
 
 class FakeElement extends Emitter {
-  constructor(id, hidden) { super(); this.id = id; this.hidden = hidden; this.textContent = ''; this.dataset = {}; this.attributes = {}; this.disabled = false; this.srcObject = null; }
+  static focused = null;
+  constructor(id, hidden) { super(); this.id = id; this.hidden = hidden; this.textContent = ''; this.dataset = {}; this.attributes = {}; this.disabled = false; this.srcObject = null; this.value = ''; }
+  focus() { FakeElement.focused = this.id; }
   setAttribute(name, value) { this.attributes[name] = String(value); }
   click() { this.emit('click', {}); }
   play() { return Promise.resolve(); }
@@ -1214,7 +1380,7 @@ function page({ search = '', orientation = 'portrait-primary', coarse = true } =
   let n = 0;
   const link = mountCamPage(g, { now: h.c.now, timers: h.c.timers, randomId: () => 'id-' + ++n });
   const $ = id => { const el = elements.get(id); assert.ok(el, 'index.html has #' + id); return el; };
-  const inside = { start: 'start-card', retry: 'notice', takeover: 'notice', 'pair-link': 'notice', mic: 'controls', stop: 'controls', 'confirm-stop': 'confirm', 'confirm-keep': 'confirm' };
+  const inside = { start: 'start-card', retry: 'notice', takeover: 'notice', 'pair-link': 'notice', 'pair-box': 'notice', 'pair-code': 'pair-box', 'pair-go': 'pair-box', 'pair-error': 'pair-box', mic: 'controls', stop: 'controls', 'confirm-stop': 'confirm', 'confirm-keep': 'confirm' };
   const visible = () => [...elements.values()].filter(el => !el.hidden && !elements.get(inside[el.id])?.hidden).map(el => el.id).filter(id => !/^(cam|self|pill-text|notice-text|confirm-text|d-)/.test(id)).sort();
   return { ...h, link, g, $, visible };
 }
@@ -1254,9 +1420,20 @@ test('the page: one primary button, then self-view, pill, the fixed "being sent"
 
   p.$('stop').click();
   assert.equal(p.$('confirm').hidden, false, 'stop asks first');
+  assert.equal(FakeElement.focused, 'confirm-keep', 'the dialog takes the focus (on the safe answer)');
   assert.equal(p.camera().readyState, 'live');
   p.$('confirm-keep').click();
-  assert.equal(p.$('confirm').hidden, true); assert.equal(p.link.state, 'live');
+  assert.equal(p.$('confirm').hidden, true); assert.equal(p.link.state, 'live'); assert.equal(FakeElement.focused, 'stop', 'and gives it back');
+  p.$('stop').click(); p.doc.emit('keydown', { key: 'a' }); assert.equal(p.$('confirm').hidden, false);
+  p.doc.emit('keydown', { key: 'Escape' }); assert.equal(p.$('confirm').hidden, true, 'Escape closes it'); assert.equal(p.link.state, 'live');
+  // the microphone she muted herself: the pill says so instead of blaming the studio
+  p.$('mic').click(); assert.equal(p.$('pill-text').textContent, TEXT.seen); assert.equal(p.$('pill-sub').textContent, TEXT.micMuted); p.$('mic').click();
+  // both tracks ended and not back yet: the controls belong to the session, so she can still stop
+  p.media.script.push(domError('NotReadableError'));
+  p.camera().stop(); p.mic().stop(); p.camera().emit('ended'); await p.c.settle();
+  assert.equal(p.$('cam').dataset.state, 'interrupted');
+  assert.deepEqual(p.visible(), ['air', 'controls', 'mic', 'pill', 'stop'], 'no "being sent" label without a live track, but stop is there');
+  await p.c.advance(1000); assert.equal(p.$('cam').dataset.state, 'live', 'the tracks came back'); await p.c.advance(1000);
   p.$('stop').click(); p.$('confirm-stop').click();
   assert.equal(p.camera().readyState, 'ended'); assert.equal(p.mic().readyState, 'ended');
   await p.c.settle();
@@ -1326,7 +1503,21 @@ test('the page: notices with their one action, the wake-lock hint, the landscape
   unpaired.api.status = { http: 401, error: 'PAIRING_REQUIRED' };
   await unpaired.link.preflight();
   assert.equal(unpaired.$('notice-text').textContent, TEXT.unpaired);
-  assert.deepEqual(unpaired.visible(), ['notice', 'pair-link']);
+  assert.deepEqual(unpaired.visible(), ['notice', 'pair-box', 'pair-code', 'pair-go', 'pair-link'], 'the code can be typed right here');
+  // a wrong code: said in her words, the field stays
+  unpaired.api.pair.push({ http: 401, error: 'INVALID_PAIRING_CODE' }, { http: 429, error: 'TOO_MANY_ATTEMPTS' }, new Error('offline'));
+  unpaired.$('pair-code').value = '00000000'; unpaired.$('pair-go').click();
+  assert.equal(unpaired.$('pair-go').disabled, true, 'one try at a time'); await unpaired.c.settle();
+  assert.equal(unpaired.$('pair-error').textContent, EXTRA_TEXT.pairBad); assert.equal(unpaired.$('pair-error').hidden, false); assert.equal(unpaired.$('pair-go').disabled, false);
+  unpaired.$('pair-code').emit('keydown', { key: '1' }); await unpaired.c.settle(); assert.equal(unpaired.api.of('POST', '/api/mobile/pair').length, 1);
+  unpaired.$('pair-code').emit('keydown', { key: 'Enter' }); await unpaired.c.settle(); assert.equal(unpaired.$('pair-error').textContent, EXTRA_TEXT.pairWait, 'Enter in the field does the same as the button');
+  unpaired.$('pair-go').click(); await unpaired.c.settle(); assert.equal(unpaired.$('pair-error').textContent, EXTRA_TEXT.pairFailed);
+  // the right code: paired, the notice is gone and the start card is back
+  unpaired.$('pair-code').value = '12345678'; unpaired.$('pair-go').click(); await unpaired.c.settle();
+  assert.deepEqual(JSON.parse(unpaired.api.of('POST', '/api/mobile/pair').at(-1).body), { code: '12345678', label: 'Browser cam' });
+  assert.equal(unpaired.$('pair-code').value, ''); assert.equal(unpaired.$('pair-error').hidden, true);
+  assert.deepEqual(unpaired.visible(), ['start', 'start-card']);
+  assert.equal(unpaired.media.calls.length, 0, 'pairing asked for no camera');
 });
 
 // ---- operator page -------------------------------------------------------------------------------------------
@@ -1356,6 +1547,17 @@ test('operator page: AUDIO OFF and the program-window banner appear exactly when
   assert.equal(opsView(ops({ link: { audio: { wanted: false } } })).banners[0].text, 'AUDIO OFF');
   assert.match(opsView(ops({ link: { audio: { wanted: true, playing: false, sink: 'no_sink' } } })).banners[0].detail, /no_sink/);
   assert.deepEqual(ids(ops({ link: { state: 'idle', audio: { wanted: false } } })), [], 'no link, no audio alarm');
+  assert.match(opsView(ops({ link: { audio: { wanted: true, playing: false, sink: 'no_sink' } } })).banners[0].detail, /allow Microphone for the program page/, 'the usual cause of no_sink and its cure are named');
+  // before anybody is connected: the hub's link.audio.sink is empty then, and the page's own word (it looks for the device at start-up) is what counts
+  const waiting = sink => ops({ program: { audio: { wanted: true, playing: false, level: 0, sink } }, link: { state: 'idle', audio: { wanted: true, playing: false, level: 0, sink: '' }, capture: null } });
+  const sinkRow = data => Object.fromEntries(opsView(data).cards.find(c => c.id === 'audio').rows).sink;
+  assert.deepEqual(ids(waiting('no_sink')), ['sink'], 'the operator learns of a silent output before she is on camera');
+  assert.deepEqual([opsView(waiting('no_sink')).banners[0].text, sinkRow(waiting('no_sink'))], ['OUTPUT DEVICE NOT FOUND', 'no_sink']);
+  assert.match(opsView(waiting('no_sink')).banners[0].detail, /silent.*allow Microphone for the program page/);
+  assert.deepEqual([ids(waiting('CABLE Input')), sinkRow(waiting('CABLE Input'))], [[], 'CABLE Input'], 'and sees the device that WILL be used');
+  assert.deepEqual(ids(ops({ program: { audio: { wanted: false, playing: false, level: 0, sink: '' } }, link: { state: 'idle', audio: { wanted: false } } })), [], 'desk mode wants no output');
+  assert.deepEqual(ids(ops({ program: { online: false, audio: { wanted: true, sink: 'no_sink' } }, link: { state: 'idle' } })), [], 'a closed program window is offline, nothing else');
+  assert.deepEqual(ids(ops({ program: { audio: { wanted: true, playing: false, level: 0, sink: 'no_sink' } }, link: { audio: { wanted: true, playing: false, level: 0, sink: 'no_sink' } } })), ['audio'], 'connected: AUDIO OFF says it, once');
   assert.deepEqual(ids(ops({ link: { state: 'negotiating', audio: { wanted: false } } })), []);
   assert.deepEqual(ids(ops({ program: { throttled: true } })), ['window']);
   assert.equal(opsView(ops({ program: { throttled: true } })).banners[0].text, 'PROGRAM WINDOW THROTTLED');

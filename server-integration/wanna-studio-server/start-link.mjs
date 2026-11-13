@@ -12,6 +12,9 @@
 //   LINK_PROGRAM_KEY (secret) or else runtime/link-program.key, which the gateway writes when it starts
 //   LINK_STAGE_URL (secret, optional): the wall behind the creator - LINK_DEV=1: the gateway asks for no program key
 // Nothing secret is printed: not the key, not the wall address. The servers are never started from here (no --open).
+// Exit code: 0 started - 1 not started - 2 wrong arguments - 3 started, but a WARNING was printed (no wall, the default audio
+// output, an output device that was not found, a gateway from another folder): start-link.cmd keeps its console open for
+// every code but 0, so a warning is read and not lost with a window that closes at once.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -24,6 +27,7 @@ export const PROFILE_FOLDER = 'WannaLinkProgram';
 // ONE --disable-features switch: a second one on the same command line replaces the first.
 export const DISABLED_FEATURES = 'CalculateNativeWinOcclusion,WebRtcHideLocalIpsWithMdns,Translate';
 export const USAGE = 'usage: node start-link.mjs [desk|air] [--sink "<part of an audio output device label>"] [--print]';
+export const EXIT_WARNED = 3;
 const REDACTED = '<redacted>';
 
 // On Windows process.env ignores the case of a name; a plain copy of it does not.
@@ -138,9 +142,10 @@ export async function launch({ argv = [], env = loadEnv(), processEnv = process.
     log('  arguments (program key and wall address redacted):'); for (const a of chromeArgs({ profileDir, url: programUrl({ ...link, redact: true }) })) log('    ' + a);
     return 0;
   }
+  let warned = false; const warn = line => { warned = true; error(line); };
   if (o.mode === 'desk' && o.sink) error('NOTE --sink is ignored in desk mode (desk plays no audio)');
-  if (wallGiven && !stage) error('WARNING LINK_STAGE_URL is set but is not a usable wall address (https, or http on this computer): starting WITHOUT a wall');
-  if (o.mode === 'air' && !o.sink) error('WARNING air without --sink: her voice plays on the Windows default output. That must be headphones or a virtual device, never open speakers.');
+  if (wallGiven && !stage) warn('WARNING LINK_STAGE_URL is set but is not a usable wall address (https, or http on this computer): starting WITHOUT a wall');
+  if (o.mode === 'air' && !o.sink) warn('WARNING air without --sink: her voice plays on the Windows default output. That must be headphones or a virtual device, never open speakers.');
   if (!chrome) { error('CHROME_NOT_FOUND looked in: ' + chromeCandidates(processEnv).join(' | ')); return 1; }
 
   // the gateway decides: is a program window already there, and does it ask for a key at all
@@ -158,7 +163,7 @@ export async function launch({ argv = [], env = loadEnv(), processEnv = process.
   if (!key && !dev) { error('PROGRAM_KEY_MISSING no LINK_PROGRAM_KEY and no runtime/link-program.key in this folder (the gateway writes that file when it starts)'); return 1; }
   if (profileInUse(profileDir, fsImpl)) { error('PROFILE_IN_USE a Chrome window with the link profile is still open. Close it first: a second start would only add a window to that Chrome, and two program windows fight over the link.'); return 1; }
   const there = ops.body.build?.root;
-  if (there && path.resolve(there).toLowerCase() !== path.resolve(root).toLowerCase()) error('WARNING the gateway on 127.0.0.1:' + gatewayPort + ' runs from another folder (' + there + '): a key read from this folder will not match it');
+  if (there && path.resolve(there).toLowerCase() !== path.resolve(root).toLowerCase()) warn('WARNING the gateway on 127.0.0.1:' + gatewayPort + ' runs from another folder (' + there + '): a key read from this folder will not match it');
 
   let pid; try { pid = await startChrome(spawnImpl, chrome, chromeArgs({ profileDir, url: programUrl(link) })); } catch (e) { error('CHROME_START_FAILED ' + (e.code || e.message)); return 1; }
   log('CAM LINK program window started (chrome pid ' + pid + ')'); for (const l of summary(dev)) log('  ' + l);
@@ -166,7 +171,18 @@ export async function launch({ argv = [], env = loadEnv(), processEnv = process.
   for (let waited = 0; waited < waitMs; waited += 500) {
     await pause(500);
     const now = await readOps(fetchImpl, gatewayPort, 1500);
-    if (speaksLink(now) && now.body.program.online) { log('  program  online at the gateway - capture only this window ("LINK PROGRAM") in LIVE Studio, never minimise it'); return 0; }
+    if (speaksLink(now) && now.body.program.online) {
+      log('  program  online at the gateway - capture only this window ("LINK PROGRAM") in LIVE Studio, never minimise it');
+      // air --sink: the page looks for the output device as it starts and reports what it found with its first echo (within about 2 s)
+      if (o.mode === 'air' && o.sink) {
+        let found = now.body.program.audio?.sink;
+        for (let i = 0; i < 8 && !found; i++) { await pause(500); const again = await readOps(fetchImpl, gatewayPort, 1500); if (speaksLink(again)) found = again.body.program.audio?.sink; }
+        if (found === 'no_sink') warn('WARNING OUTPUT_DEVICE_NOT_FOUND no audio output matches --sink "' + o.sink + '": her voice will be SILENT. Either the name is wrong, or Chrome hides the device names from this profile - one-time step: allow Microphone for http://127.0.0.1:' + port + ' in the link profile (LINK.md, "Audio output: one-time step"), then close the window and start it again.');
+        else if (found) log('  audio    output device: ' + found);
+        else error('NOTE the program page has not reported its audio output yet - check "sink" on http://127.0.0.1:' + gatewayPort + '/cam/ops before she connects');
+      }
+      return warned ? EXIT_WARNED : 0;
+    }
   }
   error('PROGRAM_NOT_ONLINE the window is open but the gateway has not seen it for ' + Math.round(waitMs / 1000) + ' s. Look at the window and at http://127.0.0.1:' + gatewayPort + '/cam/ops (the page needs internet for its models; a wrong program key is answered 403 PROGRAM_KEY_REQUIRED).');
   return 1;

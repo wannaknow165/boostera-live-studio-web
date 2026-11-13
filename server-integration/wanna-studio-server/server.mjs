@@ -17,7 +17,7 @@ import { prepareTemplate } from './lib/media.mjs';
 import { runOrder } from './lib/worker.mjs';
 import { unitsLeft } from './lib/kling.mjs';
 import { fxRoutes } from './lib/fx-routes.mjs';
-import { localStudioRequest } from './lib/studio-guards.mjs';
+import { studioRequestAllowed } from './lib/studio-guards.mjs';
 import { Automations, EVENTS } from './lib/automations.mjs';
 
 const env = loadEnv();
@@ -37,9 +37,9 @@ const MIME = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quickt
 // Tribute API: x-api-key = API_TOKEN.  Studio upstream: x-key / cookie bk = STUDIO_CLIENT_KEY (empty = open, local use).
 const apiAuthed = req => !env.API_TOKEN || req.headers['x-api-key'] === env.API_TOKEN || cookie(req).ak === env.API_TOKEN;
 // requests from this computer itself (our gallery, panels, clean layers) need no key; the key guards outside access.
-// "This computer" = a loopback peer, not forwarded, that addressed us as localhost:PORT or 127.0.0.1:PORT and was not sent by a page of another site (lib/studio-guards.mjs)
-const isLocal = req => localStudioRequest(req, PORT);
-const studioAuthed = req => !env.STUDIO_CLIENT_KEY || isLocal(req) || new URL(req.url, 'http://x').searchParams.get('ck') === env.STUDIO_CLIENT_KEY || req.headers['x-key'] === env.STUDIO_CLIENT_KEY || cookie(req).bk === env.STUDIO_CLIENT_KEY || req.headers['x-api-key'] === env.API_TOKEN;
+// "This computer" = a loopback peer, not forwarded, that addressed us as localhost:PORT or 127.0.0.1:PORT and was not sent by a page of another site (localStudioRequest in lib/studio-guards.mjs)
+// So a studio route takes: the studio key (?ck=, x-key, cookie bk) or the API token; or this computer itself; or, with no studio key configured, anything but a page of another site. A key that is not set matches nothing (studioRequestAllowed, same file)
+const studioAuthed = req => studioRequestAllowed(req, PORT, { clientKey: env.STUDIO_CLIENT_KEY || '', apiToken: env.API_TOKEN || '' });
 const cookie = req => Object.fromEntries((req.headers.cookie || '').split(';').map(s => s.trim().split('=')).filter(a => a[0]));
 
 function serveFile(req, res, root, rel) {

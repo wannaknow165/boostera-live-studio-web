@@ -24,6 +24,27 @@ export function localStudioRequest(req, port) {
     && h['sec-fetch-site'] !== 'cross-site' && localHosts(port).includes(h.host);
 }
 
+// The studio key rule (studioAuthed in server.mjs): who may use the studio routes (/save, /remix, /api/bg, /play/…).
+//   - A request that carries the studio key (?ck=, x-key or the cookie bk) or the Tribute API token (x-api-key). A key that
+//     is not configured matches nothing: an unset setting and a missing header are both "undefined", and a blank setting
+//     equals an empty header, which a page of any site can send.
+//   - A request from this computer itself (localStudioRequest above).
+//   - With no studio key configured ("empty = open": programs on this computer and devices on the network need none):
+//     everything except a request that a page of another site sent. A browser marks that one itself (Sec-Fetch-Site:
+//     cross-site), so the cross-site door is closed in every configuration.
+const cookieOf = req => Object.fromEntries(String((req.headers || {}).cookie || '').split(';').map(s => s.trim().split('=')).filter(a => a[0]));
+export function studioKeyGiven(req, { clientKey = '', apiToken = '' } = {}) {
+  const h = req.headers || {};
+  if (clientKey) {
+    let ck = null; try { ck = new URL(req.url || '/', 'http://x').searchParams.get('ck'); } catch { /* an address that cannot be read carries no key */ }
+    if ([ck, h['x-key'], cookieOf(req).bk].includes(clientKey)) return true;
+  }
+  return Boolean(apiToken) && h['x-api-key'] === apiToken;
+}
+export function studioRequestAllowed(req, port, { clientKey = '', apiToken = '' } = {}) {
+  return studioKeyGiven(req, { clientKey, apiToken }) || localStudioRequest(req, port) || (!clientKey && (req.headers || {})['sec-fetch-site'] !== 'cross-site');
+}
+
 // POST /save (lib/fx-routes.mjs) writes a request body to disk inside ./fx, and ./fx is served as the pages and scripts
 // of the origin that holds the program page. So only two kinds of target exist:
 //   ?name=<file>.webm | <file>.json       a recording or a builder track, kept flat in fx/test/out

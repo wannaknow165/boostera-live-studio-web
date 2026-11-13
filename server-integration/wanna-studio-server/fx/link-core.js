@@ -19,6 +19,8 @@ export const ANSWER_DEADLINE_MS = 12000;        // an offer is 10 s old at most 
 export const CONNECT_MS = 10000;                // not connected this long after answering -> close, report lost
 export const POLL_TIMEOUT_MS = 35000;           // the hub parks a poll for 25 s; a poll older than this is dead
 export const LEASE_PARKED_MS = 1000;            // a poll that was not refused within a second is parked: the program slot is ours
+export const RETRY_PARKED_MS = 200;             // …and after failed polls the same is assumed this soon, so the echo that lets a restarted hub adopt
+                                                // the running link leaves at once (a refusal from a gateway on this computer arrives within milliseconds)
 export const BUSY_RETRY_MS = 5000, DENIED_RETRY_MS = 5000;
 export const FAST_EMPTY_MS = 1000, FAST_EMPTY_WAIT_MS = 500, REPEAT_WAIT_MS = 250; // never spin on a hub that answers at once
 export const ECHO_LIVE_MS = 1000, ECHO_IDLE_MS = 5000, ECHO_MIN_GAP_MS = 250, ECHO_TIMEOUT_MS = 3000;
@@ -42,7 +44,9 @@ export function clampNum(v, lo, hi, dflt = lo) {
 export function clampInt(v, lo, hi, dflt = lo) { return Math.round(clampNum(v, lo, hi, dflt)); }
 export function clampFixed(v, lo, hi, digits = 1, dflt = lo) { const p = 10 ** digits; return Math.round(clampNum(v, lo, hi, dflt) * p) / p; }
 export const hz = (count, ms) => (ms > 0 && count > 0 ? Math.round(count * 10000 / ms) / 10 : 0); // events per second, one decimal
-export const backoffMs = fails => Math.min(5000, 500 * 2 ** Math.min(10, Math.max(0, (fails | 0) - 1))); // 500, 1000, 2000, 4000, 5000…
+// 500, 1000, 1000… The gateway is on this computer, so asking once a second costs nothing, and a restarted gateway must hear
+// from this page (poll, then echo) before the phone's 3 s of "this link is not mine" run out.
+export const backoffMs = fails => Math.min(1000, 500 * 2 ** Math.min(10, Math.max(0, (fails | 0) - 1)));
 
 // An error code as the hub writes them (UPPER_SNAKE), or null. Nothing free-form ever leaves the page as a "code".
 export const upperSnake = v => (typeof v === 'string' && /^[A-Z][A-Z0-9_]{1,39}$/.test(v) ? v : null);
@@ -339,12 +343,14 @@ export function sinkLabel(v) {
 
 // ---------- the state echo (POST /api/link/program/state, at most 2 KiB) ----------
 // Only the keys of the spec, numbers clamped, words from fixed lists: whatever the page holds, nothing else can leave it here.
-// (`lastError` is one key more than spec section 5 lists for this body: the hub takes it as the link's last error.)
+// (Two keys more than spec section 5 lists for this body: `lastError`, which the hub takes as the link's last error, and
+// `inst`, the per-load value that tells two windows with the same page id apart.)
 const STATES = new Set(['loading', 'idle', 'answering', 'connected', 'stalled', 'lost']);
-export function stateBody({ program, attempt = null, state, showing, stats = {}, hidden = false, audio = {}, path = null, lastError = null } = {}) {
+export function stateBody({ program, inst = '', attempt = null, state, showing, stats = {}, hidden = false, audio = {}, path = null, lastError = null } = {}) {
   const s = stats || {}, a = audio || {};
   return {
     program: pageIdFrom(program, '0'),
+    inst: String(inst ?? '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40),
     attempt: validAttempt(attempt),
     state: STATES.has(state) ? state : 'idle',
     showing: showing === 'webrtc' ? 'webrtc' : 'slate',

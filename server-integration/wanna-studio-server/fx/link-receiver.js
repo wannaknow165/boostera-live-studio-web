@@ -26,7 +26,7 @@
 // Never written to the page log or the console: SDP, ICE candidates, addresses, the program key.
 
 import {
-  NORM_W, NORM_H, DRAW_MIN_MS, STATS_MS, SLATE_REPAINT_MS, ANSWER_DEADLINE_MS, CONNECT_MS, POLL_TIMEOUT_MS, LEASE_PARKED_MS,
+  NORM_W, NORM_H, DRAW_MIN_MS, STATS_MS, SLATE_REPAINT_MS, ANSWER_DEADLINE_MS, CONNECT_MS, POLL_TIMEOUT_MS, LEASE_PARKED_MS, RETRY_PARKED_MS,
   BUSY_RETRY_MS, DENIED_RETRY_MS, FAST_EMPTY_MS, FAST_EMPTY_WAIT_MS, REPEAT_WAIT_MS, ECHO_LIVE_MS, ECHO_IDLE_MS, ECHO_MIN_GAP_MS,
   ECHO_TIMEOUT_MS, LOST_LINGER_MS, HEAD_START_MS, HEAD_START_EXTRA_MS, KEY_STORE, ZERO_STATS,
   hz, backoffMs, upperSnake, linkOptions, pageIdFrom, readProgramKey, gatewayBase, coverFit, newFreshness, noteFrames, feedDecision, judgeAt,
@@ -71,6 +71,9 @@ export function startLinkReceiver({ fx, video, log = () => {}, qs = null, win = 
   const opts = linkOptions(qs || loc.search);
   const where = gatewayBase(opts.gw, loc), gw = where.base;
   const pageId = pageIdFrom(opts.program, randomHex(win));
+  // One value per LOAD of this page. The launcher always writes program=air, so two windows with that address carry the same
+  // page id; the hub tells them apart by this (the newer one takes the slot, the older one is told to stop for good).
+  const inst = randomHex(win);
 
   // ---------- a bounded log ----------
   const ring = [], once = new Set(), counts = new Map();
@@ -207,7 +210,7 @@ export function startLinkReceiver({ fx, video, log = () => {}, qs = null, win = 
   }
   async function sendEcho() {
     echoAt = now(); echoBusy = true; echoes++;
-    try { const snap = snapshot(); lastEchoed = echoKey(snap); await post('/api/link/program/state', stateBody({ program: pageId, ...snap }), ECHO_TIMEOUT_MS); }
+    try { const snap = snapshot(); lastEchoed = echoKey(snap); await post('/api/link/program/state', stateBody({ program: pageId, inst, ...snap }), ECHO_TIMEOUT_MS); }
     catch { /* the gateway is away: the poll loop reports that, once */ }
     finally { echoBusy = false; }
   }
@@ -266,7 +269,7 @@ export function startLinkReceiver({ fx, video, log = () => {}, qs = null, win = 
     for (let i = 0; i < 3; i++) {
       if (session !== s) return { ok: false, code: null };
       try {
-        const res = await post('/api/link/program/answer', { program: pageId, attempt: s.id, sdp }, 4000);
+        const res = await post('/api/link/program/answer', { program: pageId, inst, attempt: s.id, sdp }, 4000);
         if (res.status >= 200 && res.status < 300) return { ok: true };
         if (res.status >= 400 && res.status < 500) { // STALE_ATTEMPT, CLIENT_GONE, SDP_INVALID, a refused key…: asking again cannot help
           let code = null; try { code = upperSnake((await res.json()).error); } catch { /* no body */ }
@@ -344,7 +347,11 @@ export function startLinkReceiver({ fx, video, log = () => {}, qs = null, win = 
     } else if (m.type === 'stop') {
       if (!session || session.id !== m.attempt) return;
       say(`stopped by the hub (${m.reason})`);
-      closeSession(); lastError = null; echoSoon(); // closed at once -> slate on the next draw
+      // Closed at once, always. "replaced" means the hub has already taken a newer offer (her phone's own recovery, or a
+      // takeover) and that offer is the next message in the queue: her last frame is held for what is left of its 3 s while
+      // the new connection comes up, and black follows by itself if no new picture arrives. Every other stop (she pressed
+      // stop, the offer ran out): black on the next draw.
+      closeSession({ keepFrame: m.reason === 'replaced' }); lastError = null; echoSoon();
     } else if (m.type === 'capture') {
       if (!session || session.id !== m.attempt) return;
       capture = { video: m.video, audio: m.audio, visible: m.visible };
@@ -363,10 +370,13 @@ export function startLinkReceiver({ fx, video, log = () => {}, qs = null, win = 
       const t0 = now(); polls++;
       const ctl = new win.AbortController(); pollAbort = ctl;
       const kill = win.setTimeout(() => ctl.abort(), POLL_TIMEOUT_MS);
-      const parked = win.setTimeout(() => { if (!stopped && !superseded) setLease('held'); }, LEASE_PARKED_MS); // not refused within a second = parked = the slot is ours
+      // not refused within a second = parked = the slot is ours. After failed polls (the gateway was away or restarted) that is
+      // taken on trust much sooner: holding the slot sends the echo, and the echo is what lets a restarted hub adopt the running
+      // link before the phone gives it up. An echo to a gateway that is still away is simply lost.
+      const parked = win.setTimeout(() => { if (!stopped && !superseded) setLease('held'); }, pollFails ? RETRY_PARKED_MS : LEASE_PARKED_MS);
       let status = 0, body = null;
       try {
-        const res = await win.fetch(`${gw}/api/link/program/poll?program=${pageId}&after=${after}&takeover=${opts.takeover ? 1 : 0}`, { method: 'GET', headers: keyHeaders, cache: 'no-store', credentials: 'omit', signal: ctl.signal });
+        const res = await win.fetch(`${gw}/api/link/program/poll?program=${pageId}&inst=${inst}&after=${after}&takeover=${opts.takeover ? 1 : 0}`, { method: 'GET', headers: keyHeaders, cache: 'no-store', credentials: 'omit', signal: ctl.signal });
         status = res.status;
         if (status !== 204) { try { body = await res.json(); } catch { body = null; } }
       } catch { status = 0; }
@@ -512,7 +522,7 @@ export function startLinkReceiver({ fx, video, log = () => {}, qs = null, win = 
     echoTick(false);
   }, ECHO_LIVE_MS);
   win.addEventListener('pagehide', () => { // the program slot is given back at once (a beacon cannot carry the key; the hub does not ask for it here)
-    if (lease === 'held') { try { nav.sendBeacon(`${gw}/api/link/program/bye?program=${pageId}`); } catch { /* the lease then runs out by itself */ } }
+    if (lease === 'held') { try { nav.sendBeacon(`${gw}/api/link/program/bye?program=${pageId}&inst=${inst}`); } catch { /* the lease then runs out by itself */ } }
     closeSession(); // and the connection is closed properly, so the phone learns it now and not when its checks time out
   });
   doc.addEventListener('visibilitychange', echoSoon);
@@ -535,7 +545,7 @@ export function startLinkReceiver({ fx, video, log = () => {}, qs = null, win = 
       log: ring.map(e => ({ ...e })),
     };
   };
-  const stats = () => ({ ...stateBody({ program: pageId, ...snapshot() }).stats, polls, echoes, pollFails });
+  const stats = () => ({ ...stateBody({ program: pageId, inst, ...snapshot() }).stats, polls, echoes, pollFails });
   const view = Object.freeze({ state, stats });
   try { Object.defineProperty(win, 'linkReceiver', { value: view, enumerable: true, configurable: false, writable: false }); } catch { /* the view is a convenience, the link does not depend on it */ }
 

@@ -24,14 +24,17 @@ The tap connects a camera to the studio. It does **not** start or end the TikTok
    (`GET /api/link/status`), not by its own connection state.
 8. Sound is played only with `audio=1` (launcher mode `air`), on its own `<audio>` element; `sink=` picks the output
    device and stays silent when that device is not found.
-9. One program page owns the hub (a lease by page id; `takeover=1` replaces it). One link at a time: a new attempt
-   from the same page replaces the old one, another device or tab has to press "bring it back here".
-10. Hub state is soft: after a gateway restart the media keeps flowing and the hub re-adopts the link the program reports.
+9. One program page owns the hub (a lease by page id and page load; `takeover=1` replaces it). One link at a time: a
+   new attempt from the same page replaces the old one, another device or tab has to press "bring it back here".
+10. Hub state is soft: after a gateway restart the media keeps flowing and the hub re-adopts the link the program reports
+    (within about a second of the program page finding the gateway again; the phone waits for that and offers nothing new).
 
 Files: `lib/cam-link.mjs` (hub) - `public/cam/index.html`, `cam-link.js`, `cam.css` (phone) - `public/cam/ops.html`,
 `ops.js` (operator) - `fx/link-receiver.js`, `fx/link-core.js` (program) - `start-link.mjs`, `start-link.cmd` (launcher) -
 `lib/studio-guards.mjs` (studio server guards) - tests `test/cam-link.test.mjs`, `test/link-core.test.mjs`,
-`test/cam-client.test.mjs`, `test/studio-hardening.test.mjs` (all in `npm test`) and the end-to-end browser test
+`test/cam-client.test.mjs`, `test/studio-hardening.test.mjs`, `test/link-together.test.mjs` (the real hub and the real
+phone client on one clock, with a model of the program page: recovery swap, gateway restart, a cut offer, two phones, two
+windows) - all in `npm test` - and the end-to-end browser test
 `test/run-link-browser.mjs` + `test/link-browser.py` (`npm run test:link-browser`, see below).
 
 ## API contract (summary; the binding text is the specification)
@@ -58,18 +61,31 @@ Phone side:
   tap, `X-Link-Takeover: 1`. Body: the offer SDP (200..60000 characters starting with `v=0`, at most 3 `m=` lines and
   40 candidates, else 400 `SDP_INVALID`). Answers: 201 with `Location: /api/link/whip/<attemptId>` and the answer SDP - 503
   `PROGRAM_OFFLINE` (no program page; nothing waits) - 504 `PROGRAM_TIMEOUT` (no answer in 8 s) - 409 `LINK_REPLACED`
-  (another device holds a connected link) - 409 `REPLACED` (a newer attempt took over) - 429 `OFFER_IN_FLIGHT` /
+  (another device holds the link) - 409 `REPLACED` (a newer attempt took over) - 429 `OFFER_IN_FLIGHT` /
   `OFFER_RATE_LIMIT` (one at a time, 10 per minute). The same `X-Link-Attempt` again returns the stored result.
+  "Holds the link" means, within the last 10 s: the program reported it `connected`, or reported `loading` while holding
+  it (the 20 to 60 s after a window load), or the holder took it with the takeover header. `lost` and `stalled` reports
+  do not count, so a dead holder can be replaced. "Another device" is another `X-Link-Client`; the same paired phone
+  with a new page counts as the same device once its old page has been silent for 3 s (the browser was killed and
+  its bye never arrived). An offer whose phone hung up while it waited no longer counts as "in flight".
 - `DELETE /api/link/whip/<attemptId>` or `POST /api/link/whip/<attemptId>/bye` (for `pagehide`): stop, 200
   `{ok:true}`, unknown id 404 `ATTEMPT_UNKNOWN`.
 - `POST /api/link/state` `{attempt, video, audio, visible, stats}`: what the phone's tracks are doing; 200 `{ok:true}`.
 
 Program side:
 
-- `GET /api/link/program/poll?program=<pageId>&after=<seq>&takeover=0|1`: a long poll of 25 s. 200 with the oldest
-  message not yet acknowledged (`offer`, `stop`, `capture`, each with a growing `seq`) or 204. Another page id gets 409
-  `PROGRAM_BUSY`, or with `takeover=1` takes the lease and the old page is told 410 `PROGRAM_SUPERSEDED` (it stops for
-  good). The lease lasts 10 s after the last poll. An offer stays deliverable until it is answered, replaced or 10 s old.
+- `GET /api/link/program/poll?program=<pageId>&inst=<load id>&after=<seq>&takeover=0|1`: a long poll of 25 s. 200 with
+  the oldest message not yet acknowledged (`offer`, `stop`, `capture`, each with a growing `seq`) or 204. Another page
+  gets 409 `PROGRAM_BUSY`, or with `takeover=1` takes the lease and the old page is told 410 `PROGRAM_SUPERSEDED` (it
+  stops for good). The lease lasts 10 s after the last poll. An offer stays deliverable until it is answered, replaced or
+  10 s old. `inst` is a random value per page load, also sent with `answer`, `state` and `bye`: a second window opened
+  with the same address (the launcher always writes `program=air`) is another page, not the same page polling twice. So
+  the newer window (it carries `takeover=1`) takes the link and the older one stops for good, instead of both answering
+  every offer. A reloaded window is a new load too: it takes the slot at once with `takeover=1` (or after its own bye);
+  a hand-opened page with a fixed `program=`, no `takeover=1` and no bye waits out the 10 s lease.
+- A `stop` with reason `replaced` is always queued BEFORE the offer that replaces a link. The page closes the old
+  connection at once but keeps her last frame for what is left of its 3 s, so a recovery swap or a takeover shows no
+  black frame; `client_stop` and `expired` are black at once.
 - `POST /api/link/program/answer` `{program, attempt, sdp}`: 200 `{ok:true}`; the same answer again
   `{ok:true,repeated:true}`; 409 `STALE_ATTEMPT`; 410 `CLIENT_GONE` when the phone's request has already closed.
 - `POST /api/link/program/state`: the echo (state, what is shown, numbers, audio, ICE path), every second while a
@@ -119,8 +135,8 @@ to. So after a reload the link itself is back in about 2 s, and the picture retu
 (3 to 22 s on the test computer, depending on how busy it was).
 For 20 to 60 s after a (re)load the page is still warming up (models, effects, the profile-picture cutter), with
 hold-ups of up to about 10 s on a busy computer. Once the engine is ready, a hold-up of more than 5 s can still make
-the phone offer again (the echo looks stale); the picture is then replaced by the slate for a moment. It settles by
-itself, and it is a property of the page's loading, not of the link.
+the phone offer again (the echo looks stale); the connection is then swapped while her last frame stays on (black only
+if the new picture takes more than 3 s). It settles by itself, and it is a property of the page's loading, not of the link.
 
 Phone page parameters (`/cam/?...`): `debug=1` (diagnostics panel; five taps on the status pill do the same),
 `voice=1` (call-style audio processing), `codec=vp8|h264`.
@@ -159,7 +175,10 @@ Then, done by the operator (nothing in this repository runs adb for the link):
    (with `LINK_DEV=1` no key is needed; without the launcher's switches the picture stops when the window is covered
    and sound is blocked).
 4. Phone: Chrome opens `http://localhost:8811/cam/` and she taps the button. `localhost` is what makes the camera
-   available over plain http; with `LINK_DEV=1` no pairing is needed.
+   available over plain http; with `LINK_DEV=1` no pairing is needed. Without `LINK_DEV` the page shows "the phone is
+   not paired" with a code field: type the 8-digit code from `http://127.0.0.1:8811/mobile/pair` on the PC there. (Over
+   `adb reverse` the phone counts as "this computer", so `/mobile/` on the phone shows no pairing form at all; the
+   field on `/cam/` is the way.)
 5. Operator view: `http://127.0.0.1:8811/cam/ops`.
 
 The launcher uses one Chrome profile per Windows user. While a program window of another instance is open it refuses
@@ -168,15 +187,42 @@ The launcher uses one Chrome profile per Windows user. While a program window of
 ## Operator runbook
 
 Start order: servers (`start-mobile.cmd`), then the program window, then LIVE Studio. Outside `LINK_DEV=1` the phone
-has to be paired first, as before: the code from `/mobile/pair` on the PC, typed in at `/mobile/` on the phone. A
-pairing lasts 12 hours and is lost when the gateway restarts. Then the phone opens `/cam/`. A phone can use its camera
-only on `localhost` (through `adb reverse`) or over HTTPS.
+has to be paired: the 8-digit code from `/mobile/pair` on the PC (valid 3 minutes), typed into the code field that
+`/cam/` itself shows while the phone is not paired (the pairing page `/mobile/` still works over HTTPS and is linked
+from there; it opens beside `/cam/`, which checks again when she returns). A phone can use its camera only on
+`localhost` (through `adb reverse`) or over HTTPS.
+
+**Pairing and a gateway restart (known limit of v1).** A pairing lasts 12 hours counted from the moment of pairing (it
+is not extended by use) and lives in the gateway's memory, so it is lost when the gateway restarts. Media does not
+depend on it: after a restart the hub adopts the running link and the picture and sound continue. But the phone's
+control calls are then answered 401: its pill says "משדרת · אין קשר בקרה עם האולפן", stop works on the phone only (the
+connection closes, the program shows the slate within 3 s), and at the first recovery the page shows the pairing
+notice with the code field while the camera keeps running - a new code from the PC, typed there, resumes it. Plan a
+broadcast inside one pairing and do not restart the gateway on air; under `LINK_DEV=1` (the test bed) none of this
+applies. Keeping the sessions across a restart, or letting them slide, is not built.
 
 | Command | What it opens |
 | --- | --- |
 | `start-link.cmd` (= `desk`) | Picture only. No audio parameters; this computer plays nothing. For desk tests. |
 | `start-link.cmd air --sink "<part of the output device label>"` | `audio=1` and the output device. Her voice is played on that device for LIVE Studio. |
 | `node start-link.mjs air --sink "..." --print` | Prints the Chrome arguments with the key and the wall address redacted. Starts and contacts nothing. |
+
+**Audio output: one-time step before the first `air --sink`.** The program window runs in its own Chrome profile, and
+Chrome shows a page the NAMES of the audio devices only when that page's site may use the microphone. Without that the
+page cannot match `--sink`, reports `no_sink` and stays silent (it never falls back to the default speakers). The page
+itself never opens a microphone, so nothing asks; allow it by hand, once per Windows user and per studio port:
+
+1. Close the program window. Start a normal Chrome window of the link profile on the site's settings (one line, cmd.exe):
+   `"%ProgramFiles%\Google\Chrome\Application\chrome.exe" --user-data-dir="%LOCALAPPDATA%\WannaLinkProgram" "chrome://settings/content/siteDetails?site=http%3A%2F%2F127.0.0.1%3A8800"`
+   (replace 8800 when `PORT` is another one).
+2. Set **Microphone** to **Allow**, close that window.
+3. Start the program window again (`start-link.cmd air --sink "..."`). The launcher reads back what the page found:
+   `audio    output device: <name>`, or `WARNING OUTPUT_DEVICE_NOT_FOUND`. `/cam/ops` shows the same in Audio > sink, and
+   a red banner `OUTPUT DEVICE NOT FOUND` while nobody is connected yet. Do not go on air before the device name is there.
+
+Checked on Chrome 154 (headless, a fresh profile): without the permission the page sees one unnamed output; with
+Microphone allowed for `http://127.0.0.1:<PORT>` it sees every output with its name, without ever opening a microphone.
+The browser test cannot show this (it runs with a pretend output and never uses `sink=`).
 
 The launcher starts Chrome with its own profile (`%LOCALAPPDATA%\WannaLinkProgram`), as an `--app` window without an
 address bar, 736x1319 at scale 1, without extensions, with autoplay allowed, background throttling and occlusion
@@ -186,6 +232,9 @@ It refuses to start, with a pause so the message can be read, when: a program wi
 (`GATEWAY_UNREACHABLE`, `GATEWAY_WITHOUT_CAM_LINK`), the key is missing (`PROGRAM_KEY_MISSING`) or Chrome is not found.
 To restart the window, close it and run the launcher again: it waits up to 5 s for the old one to disappear.
 After starting it waits up to 20 s for the gateway to see the page and says so (`PROGRAM_NOT_ONLINE` otherwise).
+When it started the window but printed a `WARNING` (no usable wall address, `air` without `--sink`, an output device
+that was not found, a gateway that runs from another folder) it ends with exit code 3 and `start-link.cmd` keeps its
+console open like after an error, so the warning is read; a clean start (code 0) closes the console.
 
 Rules while live:
 
@@ -201,7 +250,8 @@ Rules while live:
 - **Audio output must not be open speakers.** The phone's microphone would hear them and the echo goes on air. Use
   headphones or a dedicated (virtual) output device, name it with `--sink`, and let LIVE Studio take its sound from that
   device only. If the device is not found the page stays silent (`no_sink`) instead of using the default speakers.
-  `/cam/ops` shows a red `AUDIO OFF` banner when a link is connected and no sound is wanted or playing.
+  `/cam/ops` shows a red `OUTPUT DEVICE NOT FOUND` banner as soon as the window is open (see the one-time step above),
+  and a red `AUDIO OFF` banner when a link is connected and no sound is wanted or playing.
 - Keep `/cam/ops` open on a second screen: program online / ready / throttled, link state, incoming size, fps and
   bitrate, ICE path, audio, on-air state, build, last events.
 - Stopping the camera on the phone does not end the TikTok LIVE. End it in LIVE Studio.
@@ -216,6 +266,7 @@ Rules while live:
 5. השאירי את הדף פתוח ואת המסך דלוק. אם עברת לאפליקציה אחרת או שהמסך ננעל, התמונה נעצרת. חזרי לדף והיא חוזרת לבד.
 6. "עצרי מצלמה" עוצר רק את המצלמה. השידור בטיקטוק ממשיך עד שסוגרים אותו באולפן.
 7. אם כתוב "המצלמה עברה למכשיר אחר", לחצי על "החזירי לכאן".
+   אם כתוב "הטלפון לא משויך לאולפן", הקלידי את קוד השיוך (8 ספרות) שקיבלת מהאולפן ולחצי על "שייכי את הטלפון".
 8. בגרסה הזו משדרים לבד, בלי קרבות. את הצ'אט רואים במכשיר אחר או דרך המפיק.
 
 ## End-to-end test in a real browser (no phone, nothing visible, nothing audible)
@@ -304,8 +355,15 @@ The program page lives on the studio server (:8800), so two of its doors were na
   `localhost:<PORT>` or `127.0.0.1:<PORT>`, and not sent by a page of another site (`Sec-Fetch-Site: cross-site`). Our
   own pages, typed addresses, the gateway and other local programs are unaffected. A page of another site, a
   DNS-rebinding host name, `[::1]` and a forwarder on another port now need the key (`x-key` or `?ck=`).
+- **The key rule itself** (`studioRequestAllowed`): the studio key (`?ck=`, `x-key`, cookie `bk`) or the API token
+  (`x-api-key`), or this computer. A key that is not configured matches nothing: before, a missing `API_TOKEN` line made
+  every request without an `x-api-key` header pass, and a blank `API_TOKEN=` was matched by an empty header, which a
+  page of any site can send.
 - **`POST /save`** writes only `?name=<file>.webm|.json` (into `fx/test/out`) and
   `?path=effects/<folders>/<file>.json` (a tracking file beside its effect), else 400. Never a page, a script,
   `effect.json`, `effects/index.json` or a `remix` folder.
-- The key rule protects nothing while `STUDIO_CLIENT_KEY` is empty, and the server listens on every interface. Before
-  the PC is reachable from a LAN or the internet, make sure `STUDIO_CLIENT_KEY` and `API_TOKEN` are both set.
+- While `STUDIO_CLIENT_KEY` is empty the studio routes stay open to programs and to devices on the network ("empty =
+  open", as before), with one exception that is new: a request sent by a page of another site is refused in every
+  configuration, so a web page opened on the PC can no longer drive the studio (`/save`, `/remix`, `/api/bg`, `/play/…`).
+  A web tool on another site that used a keyless server from the browser now needs the key. The server still listens on
+  every interface: before the PC is reachable from a LAN or the internet, set both `STUDIO_CLIENT_KEY` and `API_TOKEN`.

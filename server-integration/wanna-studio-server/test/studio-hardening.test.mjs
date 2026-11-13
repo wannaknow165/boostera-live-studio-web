@@ -17,9 +17,9 @@ import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { localStudioRequest, localHosts, saveTarget, saveNameOk, savePathOk } from '../lib/studio-guards.mjs';
+import { localStudioRequest, localHosts, studioKeyGiven, studioRequestAllowed, saveTarget, saveNameOk, savePathOk } from '../lib/studio-guards.mjs';
 import { fxRoutes } from '../lib/fx-routes.mjs';
-import { parseArgs, programUrl, chromeArgs, launch, findChrome, readProgramKey, profileInUse, DISABLED_FEATURES } from '../start-link.mjs';
+import { parseArgs, programUrl, chromeArgs, launch, findChrome, readProgramKey, profileInUse, DISABLED_FEATURES, EXIT_WARNED } from '../start-link.mjs';
 
 const APP = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const read = rel => fs.readFileSync(path.join(APP, rel), 'utf8');
@@ -242,12 +242,52 @@ test('POST /save writes only allowed targets, answers 400 for the rest and 401 w
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+// ---- the key rule: who may use the studio routes ----
+const SK = 'studio-client-key-0123456789', AT = 'api-token-0123456789';
+const outside = (headers = {}, url = '/save?name=x.webm') => ({ url, socket: { remoteAddress: '192.168.1.77' }, headers: { host: '192.168.1.20:' + PORT, ...headers } }); // a device on the network
+const page = (headers = {}, url = '/save?name=x.webm') => ({ url, socket: { remoteAddress: '127.0.0.1' }, headers: { host: '127.0.0.1:' + PORT, 'sec-fetch-site': 'cross-site', origin: 'https://evil.example', ...headers } }); // a page of another site, in a browser on this computer
+const allowed = (req, keys) => studioRequestAllowed(req, PORT, keys);
+
+test('the studio key rule: the key or this computer; a key that is not configured matches nothing', () => {
+  const both = { clientKey: SK, apiToken: AT };
+  assert.equal(allowed(request({}), both), true, 'this computer needs no key');
+  for (const req of [outside(), page()]) assert.equal(allowed(req, both), false, 'no key: refused');
+  for (const make of [outside, page]) {
+    assert.equal(allowed(make({ 'x-key': SK }), both), true); assert.equal(allowed(make({}, '/play/stop?ck=' + SK), both), true); assert.equal(allowed(make({ cookie: 'a=1; bk=' + SK }), both), true);
+    assert.equal(allowed(make({ 'x-api-key': AT }), both), true, 'the API token opens the studio routes too');
+    assert.equal(allowed(make({ 'x-key': SK + 'x' }), both), false); assert.equal(allowed(make({ 'x-api-key': SK }), both), false); assert.equal(allowed(make({ 'x-key': AT }), both), false);
+  }
+  // (a) a studio key but no API_TOKEN line at all: a request without x-api-key must not match "undefined === undefined"
+  for (const req of [outside(), page(), outside({ 'x-api-key': 'undefined' })]) assert.equal(allowed(req, { clientKey: SK }), false, 'no API token configured');
+  assert.equal(allowed(outside(), { clientKey: SK, apiToken: undefined }), false); assert.equal(studioKeyGiven(outside(), { clientKey: SK, apiToken: undefined }), false);
+  // (b) API_TOKEN= (blank): an empty x-api-key header, which a page of any site can send, must not match it
+  for (const req of [outside({ 'x-api-key': '' }), page({ 'x-api-key': '' })]) assert.equal(allowed(req, { clientKey: SK, apiToken: '' }), false, 'a blank API token');
+  assert.equal(allowed(request({ 'x-api-key': '' }), { clientKey: SK, apiToken: '' }), true, 'this computer still needs none');
+  // a blank studio key is no key either: ?ck= (empty) or an empty x-key proves nothing
+  assert.equal(studioKeyGiven(outside({ 'x-key': '' }, '/save?ck='), { clientKey: '', apiToken: AT }), false);
+  assert.equal(studioKeyGiven({ headers: {} }, { clientKey: SK }), false); assert.equal(studioKeyGiven({ url: 'http://[bad', headers: { 'x-key': SK } }, { clientKey: SK }), true, 'an unreadable address still has its header');
+});
+
+test('with no studio key configured the routes stay open to programs and the network, but never to a page of another site', () => {
+  const none = { clientKey: '', apiToken: AT };
+  assert.equal(allowed(request({}), none), true);
+  assert.equal(allowed(outside(), none), true, 'empty = open, as before: the Studio and devices on the network need no key');
+  assert.equal(allowed(outside({ 'sec-fetch-site': 'same-origin' }), none), true, 'our own pages opened by the PC\'s network address');
+  assert.equal(allowed(outside({ 'sec-fetch-site': 'none' }), none), true, 'a typed address');
+  // (c) the cross-site door: a page of any site opened on this computer (or on the network) cannot drive the studio
+  assert.equal(allowed(page(), none), false); assert.equal(allowed(page({ 'x-api-key': '' }), { clientKey: '', apiToken: '' }), false);
+  assert.equal(allowed(outside({ 'sec-fetch-site': 'cross-site' }), none), false);
+  assert.equal(allowed(page(), {}), false, 'nothing configured at all');
+  assert.equal(allowed(page({ 'x-api-key': AT }), none), true, 'a caller that proves the API token is not a stray page');
+});
+
 test('server.mjs and fx-routes.mjs really use the guards', () => {
   const server = read('server.mjs'), routes = read('lib/fx-routes.mjs');
-  assert.ok(server.includes("import { localStudioRequest } from './lib/studio-guards.mjs';"));
-  assert.ok(server.includes('const isLocal = req => localStudioRequest(req, PORT);'), 'isLocal is the guard, with the port the server listens on');
+  assert.ok(server.includes("import { studioRequestAllowed } from './lib/studio-guards.mjs';"));
   assert.ok(server.includes('const PORT = Number(env.PORT || 8800);') && server.includes('server.listen(PORT,'));
-  assert.ok(server.includes('const studioAuthed = req => !env.STUDIO_CLIENT_KEY || isLocal(req) ||'), 'the key rule still starts from isLocal');
+  assert.ok(server.includes("const studioAuthed = req => studioRequestAllowed(req, PORT, { clientKey: env.STUDIO_CLIENT_KEY || '', apiToken: env.API_TOKEN || '' });"), 'the key rule is the guard, with the port the server listens on and the two configured keys');
+  assert.equal(server.split('studioAuthed(req)').length - 1, 7, 'every studio route asks the same rule');
+  assert.doesNotMatch(server, /=== env\.STUDIO_CLIENT_KEY|!env\.STUDIO_CLIENT_KEY \|\|/, 'no second, weaker copy of the rule in server.mjs');
   assert.ok(server.includes('if (fx.handle(req, res, url, studioAuthed(req))) return;'), '/save is reached through the key rule');
   assert.ok(routes.includes("import { saveTarget } from './studio-guards.mjs';"));
   assert.ok(routes.includes("const t = saveTarget(u.searchParams.get('name'), u.searchParams.get('path')), p = t?.path;"));
@@ -305,6 +345,7 @@ test('desk is picture only, air plays her voice; the ports and the key come from
   assert.ok(desk.text.includes('--sink is ignored in desk mode'));
   const air = await run(['air']);
   assert.ok(air.spawn[0].args[1].includes('&mirror=1&audio=1&gw=')); assert.ok(air.text.includes('never open speakers'), 'air without a chosen device warns');
+  assert.equal(air.code, EXIT_WARNED, 'started, with a warning: its own exit code, so start-link.cmd keeps the console open'); assert.equal(air.spawn.length, 1);
   assert.equal((await run(['air', '--sink=Line 1 (Virtual)'])).spawn[0].args[1].includes('&audio=1&sink=Line%201%20(Virtual)&gw='), true);
   // MOBILE_PORT only from the process environment (a value in server.env does not move the gateway either); PORT through lib/env.mjs
   const ports = await run([], { env: { PORT: '', MOBILE_PORT: '9999' }, processEnv: { MOBILE_PORT: '' } });
@@ -315,6 +356,7 @@ test('desk is picture only, air plays her voice; the ports and the key come from
   assert.equal((await run([], { env: { LINK_STAGE_URL: '' } })).spawn[0].args[1].includes('stage='), false);
   const badWall = await run([], { env: { LINK_STAGE_URL: 'http://wall.example/stage?t=WALLTOKEN123' } });
   assert.equal(badWall.spawn[0].args[1].includes('stage='), false); assert.ok(badWall.text.includes('WITHOUT a wall')); assert.equal(leaks(badWall.text), false);
+  assert.equal(badWall.code, EXIT_WARNED, 'on air without the wall is not a quiet success');
   // LINK_DEV=1 (set here, or reported by the running gateway): no key is asked for, so none is needed and none is sent
   const dev = await run([], { env: { LINK_DEV: '1' }, keyFile: null });
   assert.equal(dev.code, 0); assert.equal(dev.spawn[0].args[1].includes('#pk='), false);
@@ -333,9 +375,9 @@ test('the launcher refuses instead of opening a second or a useless window', asy
   await refused({ lock: 'busy', ops: [{ body: { program: { online: false } } }] }, 'PROFILE_IN_USE'); // a Chrome with the link profile is still running, although the gateway sees no page
   await refused({ chrome: false }, 'CHROME_NOT_FOUND');
   await refused({ keyFile: null }, 'PROGRAM_KEY_MISSING'); // the gateway does not run in development mode, so the page would be refused
-  assert.equal((await run(['air'], { lock: 'stale' })).code, 0, 'a lockfile left behind by a crash does not block the start');
+  assert.equal((await run(['desk'], { lock: 'stale' })).code, 0, 'a lockfile left behind by a crash does not block the start');
   // a window that was closed a moment ago is still "online" for up to 3 s: the launcher waits for that instead of refusing
-  const restart = await run(['air'], { ops: [{ body: { program: { online: true } } }, { body: { program: { online: true } } }, { body: { program: { online: false } } }, { body: { program: { online: true } } }] });
+  const restart = await run(['desk'], { ops: [{ body: { program: { online: true } } }, { body: { program: { online: true } } }, { body: { program: { online: false } } }, { body: { program: { online: true } } }] });
   assert.equal(restart.code, 0, restart.text); assert.equal(restart.spawn.length, 1); assert.ok(restart.text.includes('waiting up to 5 s'));
   const failed = await run(['air'], { spawnFails: true });
   assert.equal(failed.code, 1); assert.ok(failed.text.includes('CHROME_START_FAILED ENOENT')); assert.equal(leaks(failed.text), false);
@@ -344,8 +386,28 @@ test('the launcher refuses instead of opening a second or a useless window', asy
   assert.equal(silent.code, 1); assert.equal(silent.spawn.length, 1); assert.ok(silent.text.includes('PROGRAM_NOT_ONLINE')); assert.equal(leaks(silent.text), false);
   // the gateway runs from another folder: the key on disk here is not its key
   const other = await run(['air'], { ops: [{ body: { program: { online: false }, build: { root: 'D:\\another-copy' } } }, { body: { program: { online: true } } }] });
-  assert.equal(other.code, 0); assert.ok(other.text.includes('runs from another folder'));
+  assert.equal(other.code, EXIT_WARNED); assert.equal(other.spawn.length, 1); assert.ok(other.text.includes('runs from another folder'));
   for (const argv of [['live'], ['air', 'desk'], ['--sinc', 'x'], ['--sink'], ['--sink', '--print'], ['--sink', ' '], ['--sink', 'x'.repeat(101)]]) { const r = await run(argv); assert.equal(r.code, 2, argv.join(' ')); assert.equal(r.spawn.length + r.fetch.length, 0); }
+});
+
+test('air --sink: the launcher reads back what the page found, and an output device that is not there is a warning, not a quiet start', async () => {
+  const online = audio => ({ body: { program: { online: true, audio } } }), before = { body: { program: { online: false } } };
+  const found = await run(['air', '--sink', 'CABLE Input'], { ops: [before, online({ wanted: true, playing: false, level: 0, sink: 'CABLE Input VB-Audio Virtual Cable' })] });
+  assert.equal(found.code, 0, found.text); assert.ok(found.out.includes('  audio    output device: CABLE Input VB-Audio Virtual Cable'));
+  // the first echo of the page comes a moment after it is online
+  const later = await run(['air', '--sink', 'CABLE'], { ops: [before, online(null), online(null), online({ wanted: true, sink: 'CABLE Input' })] });
+  assert.equal(later.code, 0); assert.ok(later.text.includes('output device: CABLE Input'));
+  const missing = await run(['air', '--sink', 'CABLE Input'], { ops: [before, online({ wanted: true, playing: false, level: 0, sink: 'no_sink' })] });
+  assert.equal(missing.code, EXIT_WARNED, missing.text); assert.equal(missing.spawn.length, 1, 'the window is open');
+  assert.ok(missing.text.includes('OUTPUT_DEVICE_NOT_FOUND') && missing.text.includes('SILENT') && missing.text.includes('allow Microphone for http://127.0.0.1:8810'), 'the usual cause and its one-time cure are named:\n' + missing.text);
+  assert.equal(leaks(missing.text), false);
+  const unknown = await run(['air', '--sink', 'CABLE Input']); // the page never reported its audio
+  assert.equal(unknown.code, 0); assert.ok(unknown.text.includes('has not reported its audio output yet') && unknown.text.includes('http://127.0.0.1:8811/cam/ops'));
+  const desk = await run(['desk'], { ops: [before, online({ wanted: false, sink: null })] });
+  assert.equal(desk.code, 0); assert.equal(desk.text.includes('output device'), false, 'desk plays nothing: nothing to check');
+  // the .cmd keeps its console open for every code but 0
+  const cmd = read('start-link.cmd');
+  assert.match(cmd, /node start-link\.mjs %\*\r?\nif errorlevel 1 pause/, 'errorlevel 1 means "1 or more": a warning (3) pauses too');
 });
 
 test('--print shows the arguments with the key and the wall address redacted, and starts and contacts nothing', async () => {

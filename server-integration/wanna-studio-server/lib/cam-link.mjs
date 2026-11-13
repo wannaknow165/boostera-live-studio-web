@@ -12,15 +12,17 @@
 //   POST   /api/link/state                   {attempt, video, audio, visible, stats}
 // Program-facing routes (a local request + Origin http://127.0.0.1|localhost:<upstreamPort> + X-Link-Program-Key; CORS for
 // those two origins only):
-//   GET    /api/link/program/poll?program=<pageId>&after=<seq>&takeover=0|1     long poll: the oldest message after <seq>
-//   POST   /api/link/program/answer          {program, attempt, sdp}
-//   POST   /api/link/program/state           {program, attempt|null, state, showing, stats, hidden, audio, path, lastError}
-//   POST   /api/link/program/bye?program=    releases the lease at once (no key: sendBeacon cannot send one)
+//   GET    /api/link/program/poll?program=<pageId>&inst=<load id>&after=<seq>&takeover=0|1     long poll: the oldest message after <seq>
+//   POST   /api/link/program/answer          {program, inst, attempt, sdp}
+//   POST   /api/link/program/state           {program, inst, attempt|null, state, showing, stats, hidden, audio, path, lastError}
+//   POST   /api/link/program/bye?program=&inst=   releases the lease at once (no key: sendBeacon cannot send one)
 // Operator route (a local request):  GET /api/link/ops
 //
 // Rules worth knowing before changing anything here:
-// - One program page owns the slot (a lease by pageId, kept alive by polling). Another page gets 409 PROGRAM_BUSY, or takes
-//   the lease with takeover=1, and then the old page is told 410 PROGRAM_SUPERSEDED and must stop for good.
+// - One program page owns the slot (a lease by pageId + inst, kept alive by polling). Another page gets 409 PROGRAM_BUSY, or
+//   takes the lease with takeover=1, and then the old page is told 410 PROGRAM_SUPERSEDED and must stop for good. "inst" is a
+//   random value per page LOAD: two windows opened with the same address (the launcher always writes program=air) are two
+//   pages, not one page polling twice. A page that sends no inst is known by its pageId alone, as before.
 // - Messages to the program are an ordered queue with a growing seq; "after" acknowledges stop/capture messages. An offer
 //   is NOT consumed by delivery or by an acknowledgement: a reloaded page (after=0) gets it again until it is answered,
 //   replaced, timed out or 10 s old.
@@ -38,7 +40,10 @@ import path from 'node:path';
 export const LEASE_MS = 10000;        // a program page keeps the slot this long after its last poll ended
 export const ONLINE_GRACE_MS = 3000;  // "online" = a poll is parked, or the lease holder's last poll ended less than this ago
 export const OFFER_TTL_MS = 10000;    // an unanswered offer is handed out for at most this long
-export const HELD_MS = 10000;         // another client needs X-Link-Takeover while the link was reported connected this recently
+export const HELD_MS = 10000;         // another client needs X-Link-Takeover while the link was held this recently: reported connected, reported
+                                      // by a page that is still loading its engine, or taken with X-Link-Takeover itself
+export const HOLDER_SILENT_MS = 3000; // the same paired phone with a new page (a new X-Link-Client) needs no takeover once the page that held
+                                      // the link has not been heard from for this long (it asks for its status every second while it lives)
 export const DISOWN_GRACE_MS = 2000;  // a program report naming another attempt this soon after the answer is just an older report
 export const SUPERSEDED_MS = 10000;   // how long a displaced page that had no parked poll is remembered (to tell it 410 once)
 export const QUEUE_MAX = 20;
@@ -145,7 +150,7 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
   let closed = false;
   let seq = startedAt;             // message numbers continue above every number an earlier gateway run handed out
   const queue = [];                // messages for the program, oldest first: {seq, at, sent, type, ...}
-  let lease = null;                // {pageId, since, lastSeenAt}: the program page that owns the slot
+  let lease = null;                // {pageId, inst, since, lastSeenAt}: the program page (one load of it) that owns the slot
   let waiter = null;               // {rq, pageId, after, timer}: the one parked poll
   let lastPollEndAt = -Infinity;
   let echo = null;                 // the lease holder's last state report, sanitised
@@ -153,7 +158,7 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
   let current = null;              // the attempt that is the link right now (pending or answered), or null
   const link = { state: 'idle', since: startedAt, lastError: null };
   const offerTimes = new Map();    // identity -> times of its accepted offers in the last minute
-  const superseded = new Map();    // pageId -> when it was displaced without a parked poll to tell it
+  const superseded = new Map();    // pageId/inst -> when it was displaced without a parked poll to tell it
   const busyNoted = new Set(), quietNotes = new Map();
   const events = [];
 
@@ -202,6 +207,7 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
   const owns = (a, identity) => !a.identity || a.identity === identity.id;
   // an adopted attempt (after a gateway restart) has no owner until a phone shows that it knows its id
   function claim(a, identity, clientId) { if (!a.identity) a.identity = identity.id; if (!a.clientId && clientId) a.clientId = clientId; }
+  const heard = (a, clientId, t) => { if (a && clientId !== null && a.clientId === clientId) a.clientSeenAt = t; }; // the page that holds the link is alive
 
   // ---- the queue ----------------------------------------------------------------------------------------------------
   function push(message) {
@@ -231,10 +237,12 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
 
   // ---- the program slot ---------------------------------------------------------------------------------------------
   const online = t => !closed && Boolean(lease) && (Boolean(waiter) || t - lastPollEndAt < ONLINE_GRACE_MS);
+  const instOf = v => (typeof v === 'string' ? v : '');
+  const holds = (pageId, inst) => Boolean(lease) && lease.pageId === pageId && lease.inst === inst; // the page, and this load of it
   function dropLease(reason) {
     const old = lease; if (!old) return;
     if (waiter) { const w = waiter; waiter = null; cancel(w.timer); if (reason === 'takeover') reply(w.rq, 410, { error: 'PROGRAM_SUPERSEDED' }); else empty(w.rq); }
-    else if (reason === 'takeover') superseded.set(old.pageId, now());
+    else if (reason === 'takeover') superseded.set(old.pageId + '/' + old.inst, now());
     lease = null; echo = null; lastPollEndAt = -Infinity; busyNoted.clear();
     for (let i = queue.length - 1; i >= 0; i--) if (queue[i].type !== 'offer') queue.splice(i, 1); // they were about that page's connections
     if (current?.phase === 'answered') { // the page that held the connection is gone; a pending offer stays for the next page
@@ -256,16 +264,16 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
 
   // ---- program routes ---------------------------------------------------------------------------------------------
   function poll(rq) {
-    const q = rq.url.searchParams, pageId = q.get('program') || '';
-    if (!PAGE_RE.test(pageId)) return reply(rq, 400, { error: 'PROGRAM_INVALID' });
+    const q = rq.url.searchParams, pageId = q.get('program') || '', inst = q.get('inst') || '', who = pageId + '/' + inst;
+    if (!PAGE_RE.test(pageId) || (inst && !PAGE_RE.test(inst))) return reply(rq, 400, { error: 'PROGRAM_INVALID' });
     const t = refresh(), takeover = q.get('takeover') === '1';
     let after = Number(q.get('after') || 0); if (!Number.isFinite(after) || after < 0 || after > seq) after = 0;
-    if (superseded.has(pageId) && lease?.pageId !== pageId) { superseded.delete(pageId); return reply(rq, 410, { error: 'PROGRAM_SUPERSEDED' }); }
-    if (lease && lease.pageId !== pageId) {
-      if (!takeover) { if (!busyNoted.has(pageId)) { if (busyNoted.size > 32) busyNoted.clear(); busyNoted.add(pageId); note('program_busy', { program: pageId, holder: lease.pageId }); } return reply(rq, 409, { error: 'PROGRAM_BUSY' }); }
+    if (superseded.has(who) && !holds(pageId, inst)) { superseded.delete(who); return reply(rq, 410, { error: 'PROGRAM_SUPERSEDED' }); }
+    if (lease && !holds(pageId, inst)) { // another page, or another window that was opened with the same page id
+      if (!takeover) { if (!busyNoted.has(who)) { if (busyNoted.size > 32) busyNoted.clear(); busyNoted.add(who); note('program_busy', { program: pageId, holder: lease.pageId }); } return reply(rq, 409, { error: 'PROGRAM_BUSY' }); }
       dropLease('takeover');
     }
-    if (!lease) { lease = { pageId, since: t, lastSeenAt: t }; lastPollEndAt = -Infinity; note('program_lease', { program: pageId, takeover }); }
+    if (!lease) { lease = { pageId, inst, since: t, lastSeenAt: t }; lastPollEndAt = -Infinity; note('program_lease', { program: pageId, takeover }); }
     else { lease.lastSeenAt = t; if (waiter) { const w = waiter; waiter = null; cancel(w.timer); empty(w.rq); } } // the page's own older poll
     for (let i = queue.length - 1; i >= 0; i--) if (queue[i].type !== 'offer' && queue[i].seq <= after) queue.splice(i, 1); // acknowledged
     const m = nextFor(after, t);
@@ -282,7 +290,7 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
     if (typeof b.program !== 'string' || !PAGE_RE.test(b.program)) return reply(rq, 400, { error: 'PROGRAM_INVALID' });
     if (!idOrNull(b.attempt)) return reply(rq, 400, { error: 'ATTEMPT_INVALID' });
     if (!validSdp(b.sdp)) return reply(rq, 400, { error: 'SDP_INVALID' });
-    const t = refresh(), a = attempts.get(b.attempt), holder = Boolean(lease) && lease.pageId === b.program;
+    const t = refresh(), a = attempts.get(b.attempt), holder = holds(b.program, instOf(b.inst));
     if (holder && a && a === current && a.phase === 'answered' && a.answerSdp === b.sdp) return reply(rq, 200, { ok: true, repeated: true });
     if (!holder || !a || a !== current || a.phase !== 'pending') { noteQuiet('answer_refused', { attempt: short(b.attempt), code: 'STALE_ATTEMPT' }); return reply(rq, 409, { error: 'STALE_ATTEMPT' }); }
     const parked = a.parked?.res;
@@ -324,7 +332,7 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
         if (e.lastError) link.lastError = e.lastError;
         if (link.state !== e.state) noteQuiet(e.state, { attempt: short(a.id), ...(e.lastError ? { error: e.lastError } : {}) }); // a picture that flickers is written once per 5 s
         setLink(e.state);
-      }
+      } else if (e.state === 'loading') a.lastHeldAt = t; // the page holds the connection while its engine still starts (20 to 60 s after a load)
       return; // "answering", or "loading" while the engine still starts: negotiating, as far as a phone is concerned
     }
     if (a) { // the page names another attempt, or none: it no longer holds the one it answered (it was reloaded, or it gave up)
@@ -333,7 +341,7 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
     }
     // no link here, and the page shows a live connection this hub has never heard of: the gateway was restarted
     if (e.attempt && !attempts.has(e.attempt) && (e.state === 'connected' || e.state === 'stalled')) {
-      current = { id: e.attempt, identity: null, clientId: null, label: '', createdAt: t, phase: 'answered', endedAs: null, endedAt: null, offerSdp: null, delivered: true, parked: null, clientGone: false, timer: null, result: null, answerSdp: null, answeredAt: t, connectedAt: t, lastConnectedAt: e.state === 'connected' ? t : null, lastEchoAt: t, echo: e, adopted: true, capture: { ...CAPTURE_DEFAULT }, captureAt: null, captureStats: null };
+      current = { id: e.attempt, identity: null, clientId: null, label: '', createdAt: t, phase: 'answered', endedAs: null, endedAt: null, offerSdp: null, delivered: true, parked: null, clientGone: false, timer: null, result: null, answerSdp: null, answeredAt: t, connectedAt: t, lastConnectedAt: e.state === 'connected' ? t : null, lastHeldAt: null, takeoverAt: null, clientSeenAt: t, lastEchoAt: t, echo: e, adopted: true, capture: { ...CAPTURE_DEFAULT }, captureAt: null, captureStats: null };
       attempts.set(e.attempt, current); setLink(e.state); link.lastError = null;
       note('adopted', { attempt: short(e.attempt), state: e.state });
     }
@@ -343,15 +351,15 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
     if (typeof b.program !== 'string' || !PAGE_RE.test(b.program)) return reply(rq, 400, { error: 'PROGRAM_INVALID' });
     if (!LINK_STATES.includes(b.state)) return reply(rq, 400, { error: 'STATE_INVALID' });
     const t = refresh();
-    if (!lease || lease.pageId !== b.program) return reply(rq, 409, { error: 'PROGRAM_BUSY' }); // only the page that holds the lease (by polling) reports
+    if (!holds(b.program, instOf(b.inst))) return reply(rq, 409, { error: 'PROGRAM_BUSY' }); // only the page that holds the lease (by polling) reports
     echo = programReport(b, t); applyEcho(echo, t);
     return reply(rq, 200, { ok: true });
   }
 
   function bye(rq) {
-    const pageId = rq.url.searchParams.get('program') || '';
+    const pageId = rq.url.searchParams.get('program') || '', inst = rq.url.searchParams.get('inst') || '';
     refresh();
-    if (lease && lease.pageId === pageId) dropLease('bye');
+    if (holds(pageId, inst)) dropLease('bye'); // (a window that was superseded, or never held the slot, releases nothing by closing)
     return reply(rq, 200, { ok: true });
   }
 
@@ -403,10 +411,22 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
     }
     if (!online(t)) { if (!current) link.lastError = 'PROGRAM_OFFLINE'; noteQuiet('offer_refused', { code: 'PROGRAM_OFFLINE' }); return reply(rq, 503, { error: 'PROGRAM_OFFLINE' }); }
     const previous = current;
-    const heldByOther = previous && previous.phase === 'answered' && previous.lastConnectedAt !== null && t - previous.lastConnectedAt < HELD_MS
-      && !(clientId !== null && previous.clientId === clientId) && !(previous.adopted && !previous.clientId);
+    // "Held": the program page said "connected" for it, or said "loading" while holding it, or it was itself taken with the
+    // takeover header (her tap on "bring it back here"), each within HELD_MS. "lost" and "stalled" reports do not count, so a
+    // dead holder can always be replaced. A waiting offer counts only when it came with the takeover header and its phone
+    // still waits.
+    const heldAt = previous ? Math.max(previous.lastConnectedAt ?? -Infinity, previous.lastHeldAt ?? -Infinity, previous.takeoverAt ?? -Infinity) : -Infinity;
+    // The same holder asking again: the same page (X-Link-Client), or - for a paired phone, where one session is one phone -
+    // the same session from a new page once the old page has gone quiet (the browser was killed and its bye never arrived).
+    // Under LINK_DEV every local caller shares one identity, so there only the client id counts.
+    const sameHolder = previous && ((clientId !== null && previous.clientId === clientId)
+      || (!dev && previous.identity !== null && previous.identity === identity.id && t - previous.clientSeenAt >= HOLDER_SILENT_MS));
+    const heldByOther = previous && (previous.phase === 'answered' || (previous.takeoverAt !== null && !previous.clientGone)) && t - heldAt < HELD_MS
+      && !sameHolder && !(previous.adopted && !previous.clientId);
     if (heldByOther && !takeover) { noteQuiet('offer_refused', { code: 'LINK_REPLACED' }); return reply(rq, 409, { error: 'LINK_REPLACED' }); }
-    if (previous?.phase === 'pending' && previous.identity === identity.id) return reply(rq, 429, { error: 'OFFER_IN_FLIGHT' });
+    // one offer in flight per identity - unless the phone that waited for the earlier one has hung up (its network dropped):
+    // nobody is left to receive that answer, so the new offer takes its place below
+    if (previous?.phase === 'pending' && previous.identity === identity.id && !previous.clientGone) return reply(rq, 429, { error: 'OFFER_IN_FLIGHT' });
     const stamps = offerTimes.get(identity.id) || [];
     if (stamps.length >= OFFERS_PER_MINUTE) { noteQuiet('offer_refused', { code: 'OFFER_RATE_LIMIT' }); return reply(rq, 429, { error: 'OFFER_RATE_LIMIT' }); }
     stamps.push(t); offerTimes.set(identity.id, stamps);
@@ -417,7 +437,7 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
       if (told && lease) push({ type: 'stop', attempt: previous.id, reason: 'replaced' });
       note('replaced', { attempt: short(previous.id), by: short(id) });
     }
-    const a = { id, identity: identity.id, clientId, label: identity.label, createdAt: t, phase: 'pending', endedAs: null, endedAt: null, offerSdp: sdp, delivered: false, parked: rq, clientGone: false, timer: null, result: null, answerSdp: null, answeredAt: null, connectedAt: null, lastConnectedAt: null, lastEchoAt: null, echo: null, adopted: false, capture: { ...CAPTURE_DEFAULT }, captureAt: null, captureStats: null };
+    const a = { id, identity: identity.id, clientId, label: identity.label, createdAt: t, phase: 'pending', endedAs: null, endedAt: null, offerSdp: sdp, delivered: false, parked: rq, clientGone: false, timer: null, result: null, answerSdp: null, answeredAt: null, connectedAt: null, lastConnectedAt: null, lastHeldAt: null, takeoverAt: takeover ? t : null, clientSeenAt: t, lastEchoAt: null, echo: null, adopted: false, capture: { ...CAPTURE_DEFAULT }, captureAt: null, captureStats: null };
     attempts.set(id, a); current = a; setLink('negotiating');
     rq.res.on('close', () => { if (!rq.res.writableEnded) a.clientGone = true; });
     a.timer = later(() => { // nobody answered in time
@@ -448,7 +468,7 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
     const b = await readJson(rq.req, STATE_MAX_BYTES);
     const t = refresh(), a = idOrNull(b.attempt) ? attempts.get(b.attempt) : null;
     if (a && a === current && owns(a, identity)) {
-      claim(a, identity, idOrNull(rq.req.headers['x-link-client']));
+      claim(a, identity, idOrNull(rq.req.headers['x-link-client'])); heard(a, idOrNull(rq.req.headers['x-link-client']), t);
       const next = { video: TRACK_STATES.includes(b.video) ? b.video : a.capture.video, audio: TRACK_STATES.includes(b.audio) ? b.audio : a.capture.audio, visible: typeof b.visible === 'boolean' ? b.visible : a.capture.visible };
       const changed = next.video !== a.capture.video || next.audio !== a.capture.audio || next.visible !== a.capture.visible;
       const s = b.stats && typeof b.stats === 'object' ? b.stats : {}, stats = {};
@@ -494,9 +514,9 @@ export function createCamLink({ env = {}, port, upstreamPort, root, version, now
     if (!identity) return reply(rq, 401, { error: 'PAIRING_REQUIRED' });
     if (closed) return reply(rq, 503, { error: 'LINK_CLOSED' });
     if (name === 'status' && req.method === 'GET') {
-      refresh();
-      const clientId = idOrNull(req.headers['x-link-client']), asked = idOrNull(rq.url.searchParams.get('attempt'));
+      const t = refresh(), clientId = idOrNull(req.headers['x-link-client']), asked = idOrNull(rq.url.searchParams.get('attempt'));
       if (current && asked === current.id && owns(current, identity)) claim(current, identity, clientId);
+      if (current && owns(current, identity)) heard(current, clientId, t);
       return reply(rq, 200, view({ clientId, asked }));
     }
     if (name === 'whip' && req.method === 'POST') return whip(rq, identity);

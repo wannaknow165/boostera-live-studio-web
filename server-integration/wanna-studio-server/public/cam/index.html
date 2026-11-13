@@ -19,7 +19,7 @@
   <div class="top">
     <div id="pill" class="pill" data-tone="idle" role="status" aria-live="polite" hidden><i class="dot" aria-hidden="true"></i><span id="pill-text"></span></div>
     <p id="pill-sub" class="pill-sub" hidden></p>
-    <p id="air" class="air" hidden>🔴 באוויר בטיקטוק</p>
+    <p id="air" class="air" role="status" hidden>🔴 באוויר בטיקטוק</p>
   </div>
 
   <section id="start-card" class="card">
@@ -38,15 +38,21 @@
     <p id="notice-text" class="notice-text"></p>
     <button id="retry" class="button primary" type="button" hidden>נסי שוב</button>
     <button id="takeover" class="button primary" type="button" hidden>החזירי לכאן</button>
-    <a id="pair-link" class="button primary" href="/mobile/" hidden>לשיוך הטלפון</a>
+    <div id="pair-box" class="pair" hidden>
+      <label for="pair-code" class="pair-label">קוד השיוך מהאולפן (8 ספרות)</label>
+      <input id="pair-code" class="pair-code" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="8" dir="ltr" aria-describedby="pair-error">
+      <p id="pair-error" class="pair-error" role="alert" hidden></p>
+      <button id="pair-go" class="button primary" type="button">שייכי את הטלפון</button>
+    </div>
+    <a id="pair-link" class="button" href="/mobile/" target="_blank" rel="noopener" hidden>לשיוך הטלפון</a>
   </section>
 
   <div class="bottom">
-    <p id="mic-muted" class="chip" hidden>המיקרופון מושתק</p>
-    <p id="wake-hint" class="hint" hidden>המסך עלול להיכבות. כבי מצב חיסכון בסוללה.</p>
+    <p id="mic-muted" class="chip" role="status" hidden>המיקרופון מושתק</p>
+    <p id="wake-hint" class="hint" role="status" hidden>המסך עלול להיכבות. כבי מצב חיסכון בסוללה.</p>
     <p id="sending" class="sending" hidden>🔴 המצלמה והמיקרופון משודרים לאולפן</p>
     <div id="controls" class="controls" hidden>
-      <button id="mic" class="tool mic" type="button" aria-pressed="false" aria-label="מיקרופון">
+      <button id="mic" class="tool mic" type="button" aria-pressed="false" aria-label="השתקת מיקרופון">
         <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true" focusable="false"><path class="mic-body" d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path class="mic-stand" d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/><path class="mic-slash" d="M4 4l16 16"/></svg>
       </button>
       <button id="stop" class="tool stop" type="button">עצרי מצלמה</button>

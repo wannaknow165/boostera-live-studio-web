@@ -21,7 +21,7 @@ test('clamp helpers: a number stays inside its range, anything that is not a num
   assert.equal(core.clampInt('120.6', 0, 4000, 0), 121); assert.equal(core.clampInt('9999', 0, 4000, 0), 4000); assert.equal(core.clampInt('-1', 0, 4000, 0), 0); assert.equal(core.clampInt(null, 0, 4000, 0), 0);
   assert.equal(core.clampFixed(29.97, 0, 240, 1), 30); assert.equal(core.clampFixed(0.12345, 0, 1, 3), 0.123); assert.equal(core.clampFixed(7, 0, 1, 3), 1); assert.equal(core.clampFixed('x', 0, 1, 3, 0), 0);
   assert.equal(core.hz(30, 1000), 30); assert.equal(core.hz(179, 1000), 179); assert.equal(core.hz(15, 500), 30); assert.equal(core.hz(0, 1000), 0); assert.equal(core.hz(10, 0), 0);
-  assert.deepEqual([1, 2, 3, 4, 5, 6, 60].map(core.backoffMs), [500, 1000, 2000, 4000, 5000, 5000, 5000]); assert.equal(core.backoffMs(0), 500);
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 60].map(core.backoffMs), [500, 1000, 1000, 1000, 1000, 1000, 1000], 'the gateway is on this computer: never more than a second between tries'); assert.equal(core.backoffMs(0), 500);
   assert.equal(core.upperSnake('STREAM_REJECTED'), 'STREAM_REJECTED');
   for (const bad of ['stream_rejected', 'A', 'HAS SPACE', '9LIVES', 'X'.repeat(41), '', null, 42, 'DROP TABLE;--']) assert.equal(core.upperSnake(bad), null, `not a code: ${String(bad)}`);
   assert.equal(core.validAttempt('0b9f6c1e-1c56-4d0a-9d3e-7a1d2b3c4d5e'), '0b9f6c1e-1c56-4d0a-9d3e-7a1d2b3c4d5e');
@@ -257,20 +257,21 @@ test('sink=: the device itself is chosen over its "Default - …" alias; no matc
 });
 
 test('the state echo carries the keys of the spec and nothing else: numbers clamped, words from fixed lists, under 2 KiB', () => {
-  const body = core.stateBody({ program: 'air', attempt: 'attempt-1', state: 'connected', showing: 'webrtc', hidden: false, lastError: null, secret: 'test-only-key', sdp: SDP,
+  const body = core.stateBody({ program: 'air', inst: 'load-1', attempt: 'attempt-1', state: 'connected', showing: 'webrtc', hidden: false, lastError: null, secret: 'test-only-key', sdp: SDP,
     stats: { w: 720, h: 1280, fps: 29.97, framesDecoded: 1234, freezeCount: 1, jitterMs: 4.26, kbps: 2104.7, rttMs: 12.34, lossPct: 0.42, rafHz: 179.4, drawHz: 29.8, pcCreated: 3, vw: 736, vh: 1319, dpr: 1, extra: 'x', address: '192.168.1.50' },
     audio: { wanted: true, playing: true, level: 0.12345, sink: 'CABLE Input (VB-Audio Virtual Cable)', deviceId: 'cab' }, path: { local: 'host', remote: 'prflx', protocol: 'UDP', address: '192.168.1.50' } });
-  assert.deepEqual(body, { program: 'air', attempt: 'attempt-1', state: 'connected', showing: 'webrtc',
+  assert.deepEqual(body, { program: 'air', inst: 'load-1', attempt: 'attempt-1', state: 'connected', showing: 'webrtc',
     stats: { w: 720, h: 1280, fps: 30, framesDecoded: 1234, freezeCount: 1, jitterMs: 4.3, kbps: 2105, rttMs: 12.3, lossPct: 0.4, rafHz: 179.4, drawHz: 29.8, pcCreated: 3, vw: 736, vh: 1319, dpr: 1 },
     hidden: false, audio: { wanted: true, playing: true, level: 0.123, sink: 'CABLE Input VB-Audio Virtual Cable' }, path: { local: 'host', remote: 'prflx', protocol: 'udp' }, lastError: null });
-  const wild = core.stateBody({ program: '<air>', attempt: 'not an id', state: 'on fire', showing: 'hls', hidden: 'yes', lastError: 'it broke :(', stats: { w: -5, h: 1e9, fps: 999, framesDecoded: 'many', kbps: NaN, lossPct: 250, dpr: 99, rafHz: -1 }, audio: { level: 7, sink: 42 }, path: { local: 'host', remote: '192.168.1.50', protocol: 'udp' } });
+  const wild = core.stateBody({ program: '<air>', inst: '<x y>' + 'z'.repeat(60), attempt: 'not an id', state: 'on fire', showing: 'hls', hidden: 'yes', lastError: 'it broke :(', stats: { w: -5, h: 1e9, fps: 999, framesDecoded: 'many', kbps: NaN, lossPct: 250, dpr: 99, rafHz: -1 }, audio: { level: 7, sink: 42 }, path: { local: 'host', remote: '192.168.1.50', protocol: 'udp' } });
   assert.deepEqual([wild.program, wild.attempt, wild.state, wild.showing, wild.hidden, wild.lastError, wild.path], ['air', null, 'idle', 'slate', true, null, null]);
   assert.deepEqual([wild.stats.w, wild.stats.h, wild.stats.fps, wild.stats.framesDecoded, wild.stats.kbps, wild.stats.lossPct, wild.stats.dpr, wild.stats.rafHz, wild.stats.vw], [0, 8192, 240, 0, 0, 100, 16, 0, 0]);
   assert.deepEqual(wild.audio, { wanted: false, playing: false, level: 1, sink: '42' });
+  assert.deepEqual([wild.inst, core.stateBody({}).inst], ['xy' + 'z'.repeat(38), ''], 'the per-load value: 40 safe characters at most, empty when the page has none');
   assert.equal(core.stateBody({ state: 'lost', lastError: 'STREAM_REJECTED' }).lastError, 'STREAM_REJECTED');
   assert.deepEqual([core.stateBody({}).stats.rafHz, core.stateBody({ stats: { rafHz: null, drawHz: undefined } }).stats.drawHz, core.stateBody({ stats: { rafHz: 0 } }).stats.rafHz], [null, null, 0], 'a rate that was not measured yet is null, never "0 = throttled"');
   for (const s of ['loading', 'idle', 'answering', 'connected', 'stalled', 'lost']) assert.equal(core.stateBody({ state: s }).state, s);
-  const biggest = core.stateBody({ program: 'p'.repeat(40), attempt: 'a'.repeat(80), state: 'answering', showing: 'webrtc', hidden: true, lastError: 'E'.repeat(40), audio: { wanted: true, playing: true, level: 0.999, sink: 'S'.repeat(40) }, path: { local: 'srflx', remote: 'relay', protocol: 'tcp' },
+  const biggest = core.stateBody({ program: 'p'.repeat(40), inst: 'i'.repeat(40), attempt: 'a'.repeat(80), state: 'answering', showing: 'webrtc', hidden: true, lastError: 'E'.repeat(40), audio: { wanted: true, playing: true, level: 0.999, sink: 'S'.repeat(40) }, path: { local: 'srflx', remote: 'relay', protocol: 'tcp' },
     stats: { w: 8192, h: 8192, fps: 239.9, framesDecoded: 999999999999, freezeCount: 999999999, jitterMs: 9999.9, kbps: 99999, rttMs: 59999.9, lossPct: 99.9, rafHz: 999.9, drawHz: 999.9, pcCreated: 999999999, vw: 19999, vh: 19999, dpr: 15.99 } });
   assert.ok(JSON.stringify(biggest).length < 1024, 'well under the hub\'s 2 KiB');
   assert.ok(!JSON.stringify([body, wild]).includes('test-only-key') && !JSON.stringify([body, wild]).includes('192.168.') && !JSON.stringify(body).includes('v=0'), 'no key, no address, no SDP');
@@ -452,12 +453,16 @@ test('receiver: the key leaves the address at once, travels only as a header, an
   assert.equal(w.doc.title, 'LINK PROGRAM', 'a window title of its own for the capture picker (clean mode)');
   await w.advance(50);
   const poll = w.hub.polls[0];
-  assert.deepEqual([poll.method, poll.origin, poll.path, poll.query, poll.headers, poll.credentials, poll.cache], ['GET', 'http://127.0.0.1:8801', '/api/link/program/poll', { program: 'air', after: '0', takeover: '1' }, { 'X-Link-Program-Key': 'test-only-key-123' }, 'omit', 'no-store']);
+  const inst = poll.query.inst; assert.match(inst, /^[0-9a-f]{16}$/, 'a random value per load of the page');
+  assert.deepEqual([poll.method, poll.origin, poll.path, poll.query, poll.headers, poll.credentials, poll.cache], ['GET', 'http://127.0.0.1:8801', '/api/link/program/poll', { program: 'air', inst, after: '0', takeover: '1' }, { 'X-Link-Program-Key': 'test-only-key-123' }, 'omit', 'no-store']);
   engineUp(w); const pc = await connect(w);
   assert.equal(view(w).state, 'connected');
   assert.deepEqual(w.hub.answers[0].headers, { 'Content-Type': 'application/json', 'X-Link-Program-Key': 'test-only-key-123' }); assert.deepEqual(w.hub.states.at(-1).headers, w.hub.answers[0].headers);
   w.emit('pagehide');
-  assert.deepEqual(w.beacons, ['http://127.0.0.1:8801/api/link/program/bye?program=air'], 'the program slot is given back at once; a beacon carries no key');
+  assert.deepEqual([w.hub.answers[0].body.inst, w.hub.states.at(-1).body.inst, w.hub.polls.at(-1).query.inst], [inst, inst, inst], 'poll, answer and echo of one load name the same instance');
+  assert.deepEqual(w.beacons, ['http://127.0.0.1:8801/api/link/program/bye?program=air&inst=' + inst], 'the program slot is given back at once; a beacon carries no key');
+  const other = boot({ url: 'http://127.0.0.1:8800/fx/?clean=1&src=live&program=air&takeover=1' }); await other.advance(50);
+  assert.notEqual(other.hub.polls[0].query.inst, inst, 'a second window with the very same address is another instance'); other.rx.stop();
   assert.equal(pc.closed, true, 'and the connection is closed, so the phone learns it now');
   const everything = JSON.stringify([view(w), w.win.linkReceiver.stats(), w.logs, w.beacons, w.calls.map(c => [c.path, c.query, c.body && { ...c.body, sdp: '' }])]);
   assert.ok(!everything.includes('test-only-key-123'), 'the key is in the header and nowhere else');
@@ -619,6 +624,30 @@ test('receiver: stop closes at once and shows the slate; "camera away" from the 
   const idle = w.hub.states.length; await w.advance(10000); assert.equal(w.hub.states.length - idle, 2, 'idle: an echo every 5 s');
   pc = await connect(w, A2); assert.deepEqual([view(w).state, w.win.linkReceiver.stats().pcCreated], ['connected', 2]);
   const live = w.hub.states.length; await feed(w, pc, 5000); assert.ok(w.hub.states.length - live >= 5 && w.hub.states.length - live <= 6, 'connected: an echo every second');
+  // an offer that ran out ("expired") is black at once too
+  norm.ops.length = 0; w.hub.deliver({ type: 'stop', attempt: A2, reason: 'expired' }); await w.advance(40);
+  assert.deepEqual([pc.closed, view(w).state, view(w).showing, norm.ops.at(-1).op], [true, 'idle', 'slate', 'fill']);
+  w.rx.stop();
+});
+
+test('receiver: stop(replaced) closes at once but holds her last frame: the hub sends it before the offer of every recovery swap and takeover', async () => {
+  const w = await ready(), pc1 = await connect(w), norm = normEl(w), rx = rxEl(w);
+  // exactly what the hub queues when it accepts a new offer for a connected link: stop(old, replaced), then the offer
+  norm.ops.length = 0;
+  w.hub.deliver({ type: 'stop', attempt: A1, reason: 'replaced' }); w.hub.offer(A2); await w.advance(100);
+  assert.deepEqual([pc1.closed, pc1.ontrack, w.pcs.length, view(w).attempt, view(w).state], [true, null, 2, A2, 'answering'], 'the old connection is closed at once and the new offer is being answered');
+  assert.equal(norm.ops.filter(o => o.op === 'fill').length, 0, 'no black frame: her last picture stays');
+  assert.equal(view(w).showing, 'webrtc');
+  await w.advance(400); const pc2 = w.pcs[1]; pc2.state('connected'); rx.readyState = 4; rx.videoWidth = 720; rx.videoHeight = 1280; await feed(w, pc2, 1200);
+  assert.deepEqual([view(w).state, norm.ops.filter(o => o.op === 'fill').length], ['connected', 0], 'the swap never showed the slate');
+  assert.ok(norm.ops.some(o => o.op === 'draw'), 'and the new picture is drawn');
+  // the stop alone, with no offer behind it (the new phone never got through): black after what is left of the 3 s, not for ever
+  await feed(w, pc2, 300); norm.ops.length = 0;
+  w.hub.deliver({ type: 'stop', attempt: A2, reason: 'replaced' }); await w.advance(100);
+  assert.deepEqual([pc2.closed, view(w).state, view(w).attempt, view(w).lastError], [true, 'idle', null, null]);
+  await w.advance(2400); assert.equal(norm.ops.length, 0, 'held');
+  await w.advance(700); assert.deepEqual([norm.ops.at(-1).op, view(w).showing], ['fill', 'slate'], 'never longer than 3 s after her last frame');
+  await w.advance(300); assert.deepEqual([w.hub.states.at(-1).body.state, w.hub.states.at(-1).body.showing, w.hub.states.at(-1).body.stats.fps], ['idle', 'slate', 0]);
   w.rx.stop();
 });
 
@@ -628,7 +657,7 @@ test('receiver: a new offer replaces the connection — one live connection, the
   assert.deepEqual([w.pcs.length, w.pcs[0].closed, w.pcs[1].closed, w.hub.answers.map(a => a.body.attempt)], [2, true, false, [A2]]);
   const pc2 = w.pcs[1], rx = rxEl(w), norm = normEl(w); pc2.state('connected'); rx.readyState = 4; rx.videoWidth = 720; rx.videoHeight = 1280; await feed(w, pc2, 1200);
   assert.equal(view(w).state, 'connected');
-  w.hub.offer(A3); await w.advance(30);
+  w.hub.deliver({ type: 'stop', attempt: A2, reason: 'replaced' }); w.hub.offer(A3); await w.advance(60); // the hub's order for a connected link: stop first
   assert.deepEqual([pc2.closed, view(w).attempt, view(w).state], [true, A3, 'answering']);
   norm.ops.length = 0; await w.advance(2500); assert.equal(norm.ops.length, 0, 'no black flash while the new connection comes up');
   await w.advance(600); assert.equal(norm.ops.at(-1).op, 'fill', 'but never longer than 3 s after her last frame');
@@ -687,11 +716,16 @@ test('receiver: gateway away -> growing pauses, said once, media untouched; back
   const parked = w.hub.parked; w.hub.parked = null; w.hub.down = true; const diedAt = w.now(); parked.done(500, { error: 'REQUEST_FAILED' }); await w.advance(0);
   const n = w.calls.length; await feed(w, pc, 20000);
   const tries = w.calls.slice(n).filter(c => c.path.endsWith('/poll')).map(c => Math.round(c.at - diedAt));
-  assert.deepEqual(tries.slice(0, 6), [500, 1500, 3500, 7500, 12500, 17500], 'pauses of 0.5, 1, 2, 4, then 5 s');
+  assert.deepEqual(tries.slice(0, 6), [500, 1500, 2500, 3500, 4500, 5500], 'a pause of 0.5 s, then 1 s each time');
   assert.equal(w.logs.filter(l => l.includes('does not answer')).length, 1);
   assert.deepEqual([pc.closed, view(w).state, view(w).lease], [false, 'connected', 'none'], 'media does not depend on the gateway');
-  w.hub.down = false; w.hub.seq = 0; w.hub.queue = []; await feed(w, pc, 6500); // the new process numbers its messages from 1 again
+  const echoed = w.hub.states.length, backAt = w.now();
+  w.hub.down = false; w.hub.seq = 0; w.hub.queue = []; await feed(w, pc, 1300); // the new process numbers its messages from 1 again
   assert.deepEqual([w.hub.polls.at(-1).query.after, view(w).lease], ['0', 'held'], 'an old `after` must not hide the new hub\'s messages');
+  // the phone gives a link that is "not mine" 3 s: poll (within 1 s) and echo (0.2 s after it) must both be there well before that
+  assert.ok(w.hub.states.length > echoed, 'the echo left'); assert.ok(w.hub.states[echoed].at - backAt <= 1300, 'within 1.3 s of the gateway being back: ' + (w.hub.states[echoed].at - backAt));
+  assert.ok(w.hub.polls.at(-1).at <= w.hub.states[echoed].at, 'after the poll that takes the slot');
+  await feed(w, pc, 5000);
   assert.deepEqual([w.hub.states.at(-1).body.attempt, w.hub.states.at(-1).body.state], [A1, 'connected'], 'soft state: the hub can adopt the live attempt from the echo');
   w.hub.deliver({ type: 'stop', attempt: A1, reason: 'client_stop' }); await w.advance(50); assert.equal(pc.closed, true, 'seq 1 of the new hub was not skipped');
   w.rx.stop();

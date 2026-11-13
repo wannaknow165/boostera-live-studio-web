@@ -23,6 +23,8 @@ SEEN_HEARD = 'מחוברת לאולפן · רואים ושומעים אותך'
 AUDIO_OFF = 'הקול כבוי באולפן (מצב בדיקה)'
 REPLACED = 'המצלמה עברה למכשיר אחר'
 UNPAIRED = 'הטלפון לא משויך לאולפן'
+PAIR_BAD = 'הקוד שגוי או שפג תוקפו. בקשי קוד חדש מהאולפן.'
+MIC_MUTED = 'המיקרופון מושתק'
 THROTTLED = 'מסך השידור באולפן מוסתר או ממוזער'
 ARGS = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--autoplay-policy=no-user-gesture-required',
         '--mute-audio', '--disable-audio-output',  # the fake microphone beeps: nothing may come out of this computer's speakers (the second
@@ -271,6 +273,13 @@ def run_dev(browser):
     if engine['fast']:
         c2, _ = until(lambda: (lambda c: c if c['pill'] == SEEN_HEARD else None)(phone2.evaluate(CAM)), 'g: the pill says "seen and heard"', 25)
         check(c2['tone'] == 'ok' and c2['sub'] == '', 'g: green, and no "audio off" note', [c2['pill'], c2['sub']])
+        # her own mute is said as her own mute, at once, and never as "the studio does not play your voice"
+        phone2.locator('#mic').click()
+        c2, _ = until(lambda: (lambda c: c if c['pill'] == SEEN and c['sub'] == MIC_MUTED else None)(phone2.evaluate(CAM)), 'g: muted by her: "seen", with the reason beside it', 5)
+        time.sleep(6.5); c2 = phone2.evaluate(CAM)
+        check(c2['pill'] == SEEN and c2['sub'] == MIC_MUTED and c2['tone'] == 'ok', 'g: still so after more than 5 s of silence', [c2['pill'], c2['sub']])
+        phone2.locator('#mic').click()
+        until(lambda: (lambda c: c if c['pill'] == SEEN_HEARD else None)(phone2.evaluate(CAM)), 'g: unmuted: seen and heard again', 15)
     o = ops(); check(o['link']['audio']['sink'] == 'default' and o['program']['audio']['wanted'] is True and o['link']['audio']['level'] >= 0, 'g: the default output, as no sink= was given', o['link']['audio'])
     number('g.audio', o['link']['audio'])
     until(lambda: opsPage.evaluate("() => ![...document.querySelectorAll('[data-banner]')].some(b => b.dataset.banner === 'audio') && document.querySelector('[data-card=audio]').dataset.tone === 'ok'"), 'g: the operator page drops the AUDIO OFF banner', 10)
@@ -320,14 +329,19 @@ def run_strict(browser):
     shot('phone', 's-phone-unpaired')
     mark('s: an unpaired phone sees the pairing notice (401), no camera prompt')
 
-    # pairing, exactly as the operator does it: a code from this computer, typed in on the phone
+    # pairing, exactly as she does it: a code from this computer, typed into the code field of the notice itself.
+    # (This phone reaches the gateway as "this computer", like a phone over adb reverse: /mobile/ would show it no pairing form.)
+    check(phone.locator('#pair-code').is_visible() and phone.locator('#pair-go').is_visible(), 's: the notice has its own code field')
+    phone.locator('#pair-code').fill('00000000'); phone.locator('#pair-go').click()
+    said, _ = until(lambda: phone.evaluate("() => { const e = document.getElementById('pair-error'); return !e.hidden && e.textContent; }"), 's: a wrong code is said', 10)
+    check(said == PAIR_BAD and phone.evaluate(CAM)['state'] == 'unpaired', 's: in her words, and the field stays', said)
     code = api.post(GATEWAY + '/api/mobile/pairing-code').json()['code']
-    paired = phone_ctx.request.post(GATEWAY + '/api/mobile/pair', data={'code': code, 'label': 'Link browser test'})
-    check(paired.ok and any(k['name'] == 'wm_sid' for k in phone_ctx.cookies()), 's: the phone is paired', paired.status)
-    phone.reload(wait_until='domcontentloaded'); until(lambda: phone.evaluate("() => !!window.camLink"), 's: the capture page started')
+    phone.locator('#pair-code').fill(code); phone.locator('#pair-go').click()
+    c, _ = until(lambda: (lambda c: c if c['startCard'] and c['state'] == 'idle' else None)(phone.evaluate(CAM)), 's: paired from the page: the start card is back, without a reload', 10)
+    check(any(k['name'] == 'wm_sid' for k in phone_ctx.cookies()) and c['notice'] == '' and not c['tracksLive'], 's: the phone is paired, and no camera was asked for', c['state'])
     started = tap_start(phone); live_s, connected_s = wait_connected(ops, phone, 's', started)
     c, _ = until(lambda: (lambda c: c if c['pill'] == SEEN else None)(phone.evaluate(CAM)), 's: the pill says connected, seen', 15)
-    o = ops(); check(o['link']['client']['label'] == 'Link browser test' and o['link']['stats']['fps'] >= 15 and c['tone'] == 'ok', 's: the paired phone is connected', o['link']['stats'])
+    o = ops(); check(o['link']['client']['label'].endswith(' cam') and o['link']['stats']['fps'] >= 15 and c['tone'] == 'ok', 's: the paired phone is connected', [o['link']['client'], o['link']['stats']])
     number('s.time_to_connected_at_hub_s', connected_s)
     check(len(keyed) >= 3 and all(keyed), 's: every poll, answer and state request carried the key as a header, never in its address', [len(keyed), all(keyed)])
     shot('phone', 's-phone-connected'); shot('program', 's-program-connected')

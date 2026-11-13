@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="color-scheme" content="dark" />
+  <title>BOOSTERA · בדיקת תעבורה מלאכותית</title>
+  <style>
+    * { box-sizing: border-box; } body { margin: 0; background: #090e18; color: #eef4ff; font: 16px/1.6 system-ui, sans-serif; }
+    main { max-width: 800px; margin: 32px auto; padding: 20px; } h1 { font-size: clamp(24px, 4vw, 34px); line-height: 1.3; }
+    .card { background: #131d2d; border: 1px solid #344460; border-radius: 16px; padding: 20px; margin: 20px 0; }
+    canvas { display: block; width: 100%; height: auto; border-radius: 12px; background: #0c1424; }
+    label, input { display: block; width: 100%; } input { margin: 8px 0 16px; padding: 12px; border: 1px solid #697b96; border-radius: 8px; font: inherit; }
+    button { padding: 12px 18px; margin: 0 0 8px 8px; border: 1px solid #657897; border-radius: 8px; font: inherit; cursor: pointer; }
+    #diag-start { background: #50e2cc; color: #07151a; } button:disabled { opacity: .5; cursor: default; }
+    #diag-status { min-height: 3em; } #diag-status[data-error="true"] { color: #ffb6b6; }
+    #diag-log { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.7 ui-monospace, monospace; }
+    .muted { color: #b7c6dd; } a { color: #82dff5; }
+  </style>
+  <script src="/transport-common.js" defer></script>
+  <script src="/diagnostics.js" defer></script>
+</head>
+<body>
+  <main>
+    <p class="muted" dir="ltr">BOOSTERA · PRIVATE TRANSPORT DIAGNOSTICS</p>
+    <h1>בדיקת תעבורה — תמונה וקול מלאכותיים</h1>
+    <p>הבדיקה משדרת אנימציה של מונה וצליל סינוס חלש בלבד. אין גישה למצלמה או למיקרופון, והצליל אינו מושמע ברמקולים של דף זה.</p>
+    <p class="muted">הפעילו בחדר בדיקה פנוי בלבד. הבדיקה מתחילה בלחיצה ונעצרת אוטומטית אחרי 120 שניות לכל היותר. אפשר לעבור ללשונית המקלט בזמן הבדיקה.</p>
+    <canvas id="diag-canvas" width="640" height="360" aria-label="תמונת בדיקה מלאכותית עם מונה פריימים ושעה"></canvas>
+    <section class="card" aria-label="הפעלת הבדיקה">
+      <label for="diag-code">קוד שידור פרטי של חדר הבדיקה</label>
+      <input id="diag-code" type="password" dir="ltr" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      <button id="diag-start" type="button">התחלת בדיקה מלאכותית</button>
+      <button id="diag-stop" type="button" disabled>עצירת הבדיקה</button>
+      <p id="diag-status" role="status" aria-live="polite">לא פעיל. שום מדיה אינה נשלחת.</p>
+      <p class="muted">וידאו: ‎640×360, יעד 10 פריימים לשנייה. שמע: סינוס ‎440Hz. פרסום ערוצים אינו הוכחה שהמקלט קיבל או ניגן אותם; ודאו זאת במקלט.</p>
+      <a href="/receiver.html" target="_blank" rel="noopener noreferrer">פתיחת המקלט בלשונית חדשה</a>
+    </section>
+    <section class="card" aria-labelledby="diag-log-title">
+      <h2 id="diag-log-title">אירועי חיבור אמיתיים</h2>
+      <pre id="diag-log" aria-live="polite">ממתינים להפעלה.</pre>
+    </section>
+    <noscript>נדרש JavaScript כדי להפעיל את הבדיקה.</noscript>
+  </main>
+</body>
+</html>

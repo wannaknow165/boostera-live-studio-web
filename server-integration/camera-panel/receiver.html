@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#080c13" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="referrer" content="no-referrer" />
+    <title>BOOSTERA · מקלט פרטי</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/transport-common.js" defer></script>
+    <script src="/receiver.js" defer></script>
+  </head>
+  <body class="receiver-page">
+    <div class="page-shell">
+      <header class="site-header"><div class="brand"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span><span class="brand-name" dir="ltr">BOOSTERA<span>PRIVATE RECEIVER</span></span></div><span class="test-label">מקלט פרטי</span></header>
+      <main>
+        <section class="intro"><p class="eyebrow" dir="ltr">FROM YOUR CAMERA. IN REAL TIME.</p><h1>המצלמה שלך, <span>כאן.</span></h1><p>מסך צפייה בתמונה ובשמע שנשלחים מהטלפון.</p></section>
+        <div class="receiver-layout">
+          <section class="preview-card receiver-preview" aria-label="וידאו שמתקבל מהשולח">
+            <div class="preview-topline"><span class="preview-label">תמונה מהשולח</span><span id="receiver-media-state" class="preview-state">אין חיבור</span></div>
+            <div class="preview-stage receiver-stage">
+              <video id="receiver-video" autoplay playsinline muted hidden></video>
+              <div id="receiver-placeholder" class="preview-placeholder">
+                <div class="receiver-mark" aria-hidden="true">↙</div>
+                <h2 id="receiver-placeholder-title">מוכנים לקבל תמונה</h2>
+                <p id="receiver-placeholder-copy">הזינו את קוד הצפייה ולחצו על התחברות.</p>
+                <button id="receiver-play-button" class="button button-secondary" type="button" hidden>הפעלת התמונה</button>
+              </div>
+            </div>
+            <div class="preview-bottomline"><span id="receiver-resolution" dir="ltr">—</span><span id="receiver-audio-state">שמע כבוי</span></div>
+          </section>
+          <div class="receiver-control-column">
+            <section class="control-card" aria-labelledby="receiver-title">
+              <div class="section-topline"><span class="step-number" dir="ltr">PRIVATE CONNECTION</span><span id="receiver-pill" class="status-pill" data-state="idle"><span aria-hidden="true"></span><span id="receiver-status-label">לא מחובר</span></span></div>
+              <h2 id="receiver-title">חיבור למצלמה</h2>
+              <p class="section-copy">השתמשו בקוד הצפייה שנמסר לכם. מסך זה אינו מפעיל מצלמה או מיקרופון במחשב.</p>
+              <label class="field-label" for="receiver-code">קוד צפייה פרטי</label>
+              <input id="receiver-code" class="code-input" type="password" dir="ltr" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="קוד צפייה" />
+              <div class="receiver-actions"><button id="receiver-connect" class="button button-primary" type="button">התחברות לצפייה</button><button id="receiver-disconnect" class="button button-secondary" type="button" disabled>ניתוק</button></div>
+              <button id="receiver-sound" class="button button-secondary sound-button" type="button" aria-pressed="false" disabled>הפעלת שמע</button>
+              <div id="receiver-message" class="status-message" role="status" aria-live="polite" aria-atomic="true">הצפייה מתחילה רק אחרי לחיצה. השמע יישאר כבוי עד שתפעילו אותו.</div>
+              <div id="receiver-error" class="error-message" role="alert" hidden></div>
+            </section>
+            <aside class="guidance-card"><p>כדי לבדוק גם שמע, מומלץ להשתמש באוזניות ולהרחיק את המקלט מהטלפון השולח.</p></aside>
+          </div>
+        </div>
+      </main>
+      <footer><span dir="ltr">BOOSTERA</span><span>מקלט פרטי · צפייה בלבד</span></footer>
+    </div>
+    <div id="receiver-audio-elements" hidden></div>
+    <noscript><div class="noscript-message">כדי לצפות בתמונה, יש לאפשר JavaScript בדפדפן.</div></noscript>
+  </body>
+</html>

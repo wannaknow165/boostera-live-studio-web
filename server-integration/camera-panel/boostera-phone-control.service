@@ -1,0 +1,29 @@
+[Unit]
+Description=BOOSTERA paired phone Studio account controls
+After=network.target
+
+[Service]
+Type=simple
+User=boostera-phone
+Group=boostera-phone
+WorkingDirectory=/opt/boostera/phone-control/current
+Environment=NODE_ENV=production
+Environment=MOBILE_PORT=8801
+Environment=PHONE_PUBLIC_ORIGIN=https://camera.2-29-245-118.sslip.io
+ExecStart=/opt/boostera/node-runtime/current/bin/node /opt/boostera/phone-control/current/phone-control.mjs
+StateDirectory=boostera-phone-control
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=192M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

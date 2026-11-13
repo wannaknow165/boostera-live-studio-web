@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111019">
+<meta name="format-detection" content="telephone=no">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:,">
+<title>עלי לשידור</title>
+<link rel="stylesheet" href="/cam/cam.css">
+<script type="module" src="/cam/cam-link.js?ui=1"></script>
+</head>
+<body>
+<main id="cam" class="cam" data-state="idle">
+  <video id="self" class="self" muted playsinline autoplay aria-hidden="true"></video>
+  <div class="shade" aria-hidden="true"></div>
+
+  <div class="top">
+    <div id="pill" class="pill" data-tone="idle" role="status" aria-live="polite" hidden><i class="dot" aria-hidden="true"></i><span id="pill-text"></span></div>
+    <p id="pill-sub" class="pill-sub" hidden></p>
+    <p id="air" class="air" hidden>🔴 באוויר בטיקטוק</p>
+  </div>
+
+  <section id="start-card" class="card">
+    <h1>עלי לשידור</h1>
+    <p class="lead">הטלפון יבקש אישור למצלמה ולמיקרופון</p>
+    <ul class="checklist">
+      <li dir="ltr">Wi‑Fi</li>
+      <li>מטען בכבל</li>
+      <li>נא לא להפריע</li>
+      <li>טלפון לאורך</li>
+    </ul>
+    <button id="start" class="button primary" type="button">חברי מצלמה ומיקרופון</button>
+  </section>
+
+  <section id="notice" class="card" role="alert" hidden>
+    <p id="notice-text" class="notice-text"></p>
+    <button id="retry" class="button primary" type="button" hidden>נסי שוב</button>
+    <button id="takeover" class="button primary" type="button" hidden>החזירי לכאן</button>
+    <a id="pair-link" class="button primary" href="/mobile/" hidden>לשיוך הטלפון</a>
+  </section>
+
+  <div class="bottom">
+    <p id="mic-muted" class="chip" hidden>המיקרופון מושתק</p>
+    <p id="wake-hint" class="hint" hidden>המסך עלול להיכבות. כבי מצב חיסכון בסוללה.</p>
+    <p id="sending" class="sending" hidden>🔴 המצלמה והמיקרופון משודרים לאולפן</p>
+    <div id="controls" class="controls" hidden>
+      <button id="mic" class="tool mic" type="button" aria-pressed="false" aria-label="מיקרופון">
+        <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true" focusable="false"><path class="mic-body" d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path class="mic-stand" d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/><path class="mic-slash" d="M4 4l16 16"/></svg>
+      </button>
+      <button id="stop" class="tool stop" type="button">עצרי מצלמה</button>
+    </div>
+  </div>
+
+  <div id="confirm" class="sheet" role="dialog" aria-modal="true" aria-labelledby="confirm-text" hidden>
+    <div class="sheet-box">
+      <p id="confirm-text">לעצור את המצלמה? השידור בטיקטוק ממשיך עד שסוגרים אותו באולפן.</p>
+      <button id="confirm-stop" class="button danger" type="button">עצרי מצלמה</button>
+      <button id="confirm-keep" class="button primary" type="button">המשיכי</button>
+    </div>
+  </div>
+
+  <div id="landscape" class="landscape" role="alert" hidden>סובבי את הטלפון לאורך</div>
+
+  <aside id="diag" class="diag" dir="ltr" lang="en" hidden>
+    <dl>
+      <dt>state</dt><dd id="d-state"></dd>
+      <dt>codec</dt><dd id="d-codec"></dd>
+      <dt>encoder</dt><dd id="d-encoder"></dd>
+      <dt>size</dt><dd id="d-size"></dd>
+      <dt>fps</dt><dd id="d-fps"></dd>
+      <dt>kbps</dt><dd id="d-kbps"></dd>
+      <dt>rtt ms</dt><dd id="d-rtt"></dd>
+      <dt>loss %</dt><dd id="d-loss"></dd>
+      <dt>limited by</dt><dd id="d-limit"></dd>
+      <dt>ice path</dt><dd id="d-path"></dd>
+      <dt>attempts</dt><dd id="d-attempts"></dd>
+      <dt>link</dt><dd id="d-pc"></dd>
+    </dl>
+  </aside>
+</main>
+</body>
+</html>

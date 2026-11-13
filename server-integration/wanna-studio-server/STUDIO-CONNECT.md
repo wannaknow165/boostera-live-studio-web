@@ -34,4 +34,4 @@
 - המטרה בקרב (הראש החי של המתחרה): השכבה `/clean/foreground` מוצאת אותו לבד ממסך הקרב בטלפון. `POST /api/opponent-pick {pick:{fx,fy}}` = לבחור ראש אחר לפי מקומו על מסך הטלפון (`{pick:null}` = אוטומטי: מי שמולי) · `POST /api/opponent-face?enabled=0|1` = כיבוי/הדלקה · `GET /api/opponent-face` = מצב נוכחי · עגבנייה בסגנון הישן: `/play/screen/tomato?style=head`
 - `POST /api/opponent-face?tomatoStyle=live|head` — סגנון העגבנייה על המטרה: `live` = נזרקת על הראש החי שלו, `head` = עגבנייה בצורת הראש שלו (נשמר בשרת, כל הדפים הולכים אחריו).
 - אפקט לתומך (התומך עצמו בתוך האפקט, מצויר חי בשכבה `/clean/foreground`): `GET /play/battle/fan_burst?user=<שם>&avatar=<כתובת תמונת הפרופיל>&mult=3` · `GET /play/battle/fan_mvp?user=<שם>&avatar=<כתובת>` · או אירוע `POST /api/event { type: "supporter_gift", supporter, avatar, mult }`.
-- מבחוץ: כותרת `x-key: <BOOSTERA_CLIENT_KEY>`. מהמחשב הזה — בלי מפתח.
+- מבחוץ: כותרת `x-key: <BOOSTERA_CLIENT_KEY>`. מהמחשב הזה (פנייה ל-`localhost` או ל-`127.0.0.1` עם הפורט של השרת, ולא מתוך דף של אתר אחר) — בלי מפתח.

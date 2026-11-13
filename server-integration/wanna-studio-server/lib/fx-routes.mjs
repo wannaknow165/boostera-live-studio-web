@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { saveTarget } from './studio-guards.mjs';
 
 export function fxRoutes({ FX }) {
   const EFFECTS = path.join(FX, 'effects');
@@ -189,10 +190,12 @@ export function fxRoutes({ FX }) {
     res.end(JSON.stringify({ connected: !!p.serial, phones: p.count, serial: p.serial, app: p.app || null, tiktok: p.tiktok, fixed: !!process.env.ADB_SERIAL }));
   }
 
-  // POST /save?path=fx/effects/... (tracking) or ?name=x.webm (recordings -> fx/test/out)
+  // POST /save?path=effects/<folders>/<file>.json (tracking) or ?name=x.webm | x.json (recordings, builder tracks -> fx/test/out).
+  // Nothing else is written: this folder is served as the pages and scripts of this origin (the allow-list is saveTarget in studio-guards.mjs).
   function save(req, res, u) {
-    const p = u.searchParams.get('path');
-    let f = path.join(FX, 'test', 'out', path.basename(u.searchParams.get('name') || 'run.webm'));
+    const t = saveTarget(u.searchParams.get('name'), u.searchParams.get('path')), p = t?.path;
+    if (!t) { res.writeHead(400); return res.end('bad name or path'); }
+    let f = path.join(FX, 'test', 'out', path.basename(t.name));
     if (p) { f = path.normalize(path.join(FX, p)); if (!f.startsWith(EFFECTS + path.sep)) { res.writeHead(400); return res.end('bad path'); } }
     fs.mkdirSync(path.dirname(f), { recursive: true });
     const w = fs.createWriteStream(f); req.pipe(w); w.on('finish', () => res.end(f));

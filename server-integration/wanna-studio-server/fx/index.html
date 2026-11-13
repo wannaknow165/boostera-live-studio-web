@@ -83,13 +83,15 @@
 import { FxEngine } from './fx-engine.js';
 import { stageUrlFor, stageGate, STAGE_TIMEOUT_MS } from './stage-url.js';
 const $ = s => document.querySelector(s);
-const logEl = $('#log'); const log = m => { logEl.textContent = `${new Date().toLocaleTimeString('he-IL')} ${m}\n` + logEl.textContent; console.log(m); };
+const logEl = $('#log'), logLines = []; const log = m => { logLines.unshift(`${new Date().toLocaleTimeString('he-IL')} ${m}`); if (logLines.length > 200) logLines.length = 200; logEl.textContent = logLines.join('\n') + '\n'; console.log(m); }; // the page log keeps its newest 200 lines (it used to grow for ever)
 const video = $('#src'), out = $('#out');
 const fx = new FxEngine(video, out, { log }); window.fx = fx;
 let toastT; fx.onReject = c => { const t = $('#toast'); t.textContent = c.message; t.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => t.style.display = 'none', 3500); };
 // live readiness on each effect button
 setInterval(() => { document.querySelectorAll('button.fx').forEach(b => { if (!fx.effects[b.dataset.id]) return; const c = fx.ready && fx.check(b.dataset.id); if (!c) return; b.style.opacity = c.ok ? 1 : .55; b.title = c.message; const sm = b.querySelector('small'); if (sm) sm.textContent = c.ok ? ' ✓ מוכן' : ' ✗ חסר: ' + c.missing.map(m => FxEngine.NAMES[m] || m).join(', '); }); }, 500);
 const qs = new URLSearchParams(location.search);
+// CAM LINK (?src=live): the phone's camera + microphone arrive over WebRTC (fx/link-receiver.js). Its hub client starts HERE, before the effects and MediaPipe load, so an offer is answered while the engine is still loading
+const linkRx = qs.get('src') === 'live' ? import('./link-receiver.js').then(m => m.startLinkReceiver({ fx, video, log, qs })).catch(e => { log('LINK: ' + e.message); return null; }) : null;
 if (qs.get('clean')) document.body.classList.add('clean');
 if (qs.get('streamer')) try { localStorage.setItem('fx-streamer', qs.get('streamer')); } catch {}
 // ?stage=<https url> (clean mode only): the wall from the cloud as the lowest layer — an <iframe> under the canvas. Once it has
@@ -101,13 +103,13 @@ if (stageUrl) {
   const stageEl = $('#stage'), f = document.createElement('iframe'); f.className = 'wall'; f.title = 'stage'; f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1;
   f.setAttribute('allow', 'autoplay; fullscreen'); f.setAttribute('scrolling', 'no');
   const gate = stageGate({
-    onOpen: () => { fx.transparent = true; log('קיר מהענן מאחורי המצלמה: ' + stageUrl); },
+    onOpen: () => { fx.transparent = true; log('קיר מהענן מאחורי המצלמה: ' + new URL(stageUrl).origin); }, // the origin only: the full address carries the wall's token
     onClose: why => { f.remove(); stageEl.classList.remove('staged'); fx.transparent = false; log(`הקיר מהענן לא נטען (${why}) — ממשיכים עם המצלמה כרגיל`); },
   });
   f.onload = () => gate.loaded(); f.onerror = () => gate.failed('error');
   fetch(stageUrl, { method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(STAGE_TIMEOUT_MS) }).then(() => gate.reachable(), e => gate.failed('unreachable: ' + e.message));
   stageEl.classList.add('staged'); f.src = stageUrl; stageEl.prepend(f);
-  window.fxStage = { url: stageUrl, frame: f, gate, get on() { return fx.transparent; } }; // for tests, and for a look from the console
+  window.fxStage = { origin: new URL(stageUrl).origin, frame: f, gate, get on() { return fx.transparent; } }; // for tests, and for a look from the console (the origin only, never the full stage address)
 }
 
 async function useSrc(src) { video.srcObject = null; video.src = src; await video.play(); log('מקור: ' + src); }
@@ -136,7 +138,7 @@ async function loadAll() {
   try { list = await (await fetch('effects/index.json', { cache: 'no-store' })).json(); } catch { list = []; }
   for (const e of list) {
     const row = document.createElement('div'); row.className = 'row'; row.style.flexWrap = 'nowrap';
-    const b = document.createElement('button'); b.className = 'fx'; b.dataset.id = e.id; b.style.flex = '1'; b.innerHTML = `${e.title || e.id}<small> ⏳ טוען…</small>`;
+    const b = document.createElement('button'); b.className = 'fx'; b.dataset.id = e.id; b.style.flex = '1'; b.textContent = e.title || e.id; const sm = document.createElement('small'); sm.textContent = ' ⏳ טוען…'; b.append(sm); // text, never markup: the title comes from a file on disk
     const prep = document.createElement('button'); prep.className = 'prep'; prep.dataset.id = e.id; prep.textContent = 'הכן רמיקס'; prep.style.whiteSpace = 'nowrap';
     // main button: plays her remix when it's ready; without a remix it falls back to the overlay effect
     b.onclick = async () => { current = e.id; if (!fx.effects[e.id]) { log('טוען ' + e.title + '…'); await ensure(e); }
@@ -198,10 +200,12 @@ async function record(id, name) {
 }
 
 await loadAll(); refreshRemix();
+if (linkRx) await (await linkRx)?.headStart; // CAM LINK: a phone that is waiting is answered first (4.5 s at most when nobody asks), because the models then hold this page for seconds at a time
 log('טוען MediaPipe…'); await fx.init(); fx.start();
 // live sources only: phone (ADB) or the computer camera
 if (qs.get('src') === 'phone') usePhone();
 else if (qs.get('src') === 'camera') $('#cam').onclick().catch(e => log('מצלמה: ' + e.message)); // the computer camera, as the button does (before: a file named "camera", i.e. nothing)
+else if (qs.get('src') === 'live') { /* receiver already started */ } // CAM LINK: started above, right after `const qs` (never a file named "live")
 else if (qs.get('src')) useSrc(qs.get('src'));
 log('מוכן');
 window.fxReady = true;
@@ -242,7 +246,8 @@ headsEl.onclick = e => { if (!picking) return; const p = picRect(); fx.pickHeadA
 })();
 fx.loadTomato();
 // the battle target: watch the phone's battle screen automatically (unless ?opp=0). ?oppsrc=<video file> = a stand-in for the phone (tests)
-if (qs.get('opp') !== '0') fx.watchOpponent(qs.get('oppsrc') || undefined);
+// ?src=live: off unless ?opp=1 (the watcher makes the server run adb against every attached phone, and loads three more models)
+if (qs.get('opp') === '1' || (qs.get('src') !== 'live' && qs.get('opp') !== '0')) fx.watchOpponent(qs.get('oppsrc') || undefined);
 // the switch (kept on the server so the clean foreground layer follows it too) + the pick + a face another panel already found
 fetch('/api/opponent-face').then(r => r.json()).then(j => { if (j.tomatoStyle) setTomatoStyle(j.tomatoStyle); else if (fx.tomatoStyle === 'head') tellTomatoStyle(); $('#oppOn').checked = fx.useOppFace = j.enabled !== false; if (fx.opp) { fx.opp.enabled = fx.useOppFace; fx.opp.applyPick(j.pick || null); } if (j.opponent?.url && !fx.oppFace) fx.setOpponentFace(j.opponent.url, j.opponent.at); }).catch(() => {});
 $('#oppOn').onchange = () => { fx.useOppFace = $('#oppOn').checked; if (fx.opp) fx.opp.enabled = fx.useOppFace; fetch('/api/opponent-face?enabled=' + (fx.useOppFace ? 1 : 0), { method: 'POST' }).catch(() => {}); };

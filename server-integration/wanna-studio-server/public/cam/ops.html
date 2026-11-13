@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#111019">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:,">
+<title>CAM LINK · operator</title>
+<link rel="stylesheet" href="/cam/cam.css">
+<script type="module" src="/cam/ops.js"></script>
+</head>
+<body class="ops-body">
+<main id="ops" class="ops">
+  <div class="ops-head">
+    <h1>CAM LINK <small>operator</small></h1>
+    <span id="conn" class="ops-conn" role="status">connecting…</span>
+  </div>
+  <div id="banners" class="banners" role="alert" aria-live="assertive"></div>
+  <div id="cards" class="cards"></div>
+  <section class="card events">
+    <h2>Last events</h2>
+    <p id="no-events" class="ops-muted">No events yet.</p>
+    <table>
+      <tbody id="events"></tbody>
+    </table>
+  </section>
+  <p class="ops-muted">This page is served to this computer only. It shows no keys, no SDP and no addresses.</p>
+</main>
+</body>
+</html>

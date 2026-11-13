@@ -7,6 +7,8 @@ import {fileURLToPath} from 'node:url';
 import {loadEnv,ROOT} from './lib/env.mjs';
 import {MobileSessions} from './lib/mobile-session.mjs';
 import {createWorkspace} from './lib/mobile-workspace.mjs';
+import {createGatewayCamLink} from './lib/cam-link.mjs';
+const VERSION='1.3.0';
 const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.webmanifest':'application/manifest+json','.png':'image/png','.svg':'image/svg+xml'};
 export function localRequest(req,port){return['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)&&!req.headers['cf-connecting-ip']&&!req.headers['x-forwarded-for']&&['127.0.0.1:'+port,'localhost:'+port].includes(req.headers.host);}
 function cookies(req){return Object.fromEntries((req.headers.cookie||'').split(';').map(x=>x.trim().split('=')).filter(x=>x[0]));}
@@ -17,9 +19,11 @@ export function validMediaPath(input){
   if(!/^\/(fx\/(fx-engine\.js|head-tomato\.js|opponent\.js|battle-stage\.js|assets\/|effects\/)|media\/)/.test(input))return false;
   return/\.(js|mjs|json|mp4|webm|mov|png|jpe?g|webp|svg|mp3|wav|glb|gltf|bin|task|tflite|wasm)$/i.test(input);
 }
-export function createMobileGateway({port=8801,upstreamPort=8800,clientKey='',apiKey='',env={},workspaceRoot=ROOT,workspaceOptions={},sessions=new MobileSessions()}={}){
+export function createMobileGateway({port=8801,upstreamPort=8800,clientKey='',apiKey='',env={},workspaceRoot=ROOT,workspaceOptions={},sessions=new MobileSessions(),linkOptions={},camDir=path.join(ROOT,'public','cam')}={}){
   const mobileDir=path.join(ROOT,'public','mobile'),frames=new Map(),audio=new Map();let publicUrl='';
   const workspace=createWorkspace({root:workspaceRoot,upstreamPort,apiKey,clientKey,env,...workspaceOptions});
+  // CAM LINK hub (lib/cam-link.mjs): signalling only, between the phone page /cam/ and the program page on :upstreamPort. air = what the TikTok event connection knows (connected = on air, ended = the LIVE was seen ending)
+  const link=createGatewayCamLink({env,port,upstreamPort,root:workspaceRoot,version:VERSION,publicUrl:()=>publicUrl,air:()=>{const s=workspace.live.state.status;return{known:s==='connected'||s==='ended',live:s==='connected'};},...linkOptions});
   const localSession={id:'local-desktop',label:'המחשב',frames:0,bytes:0,audioTests:0};
   const send=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
   function auth(req){return localRequest(req,port)?localSession:sessions.get(cookies(req).wm_sid);}
@@ -40,6 +44,7 @@ export function createMobileGateway({port=8801,upstreamPort=8800,clientKey='',ap
     res.setHeader('Permissions-Policy','camera=(self), microphone=(self), display-capture=(self)');
     try{
       const url=new URL(req.url,'http://gateway'),p=decodeURIComponent(url.pathname);
+      if(p.startsWith('/api/link/')&&await link.handle(req,res,url,{local:localRequest(req,port),paired:sessions.get(cookies(req).wm_sid)}))return;
       if(['POST','PUT','DELETE'].includes(req.method)&&!sameOrigin(req))return send(res,403,{error:'ORIGIN_REJECTED'});
       if(req.method==='OPTIONS'){res.writeHead(405);return res.end();}
       if(await workspace.publicMedia(req,res,url))return;
@@ -71,12 +76,23 @@ export function createMobileGateway({port=8801,upstreamPort=8800,clientKey='',ap
           'Content-Security-Policy':"default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"});
         fs.createReadStream(file).pipe(res);return;
       }
+      if(p==='/cam'){res.writeHead(302,{Location:'/cam/'+url.search});return res.end();}
+      if(p.startsWith('/cam/')){
+        let name=p==='/cam/'?'index.html':p.slice('/cam/'.length);
+        if(name==='ops'||name==='ops/')name='ops.html';
+        if((name==='ops.html'||name==='ops.js')&&!localRequest(req,port))return send(res,403,{error:'LOCAL_SETUP_ONLY'});
+        if(!['index.html','cam-link.js','cam.css','ops.html','ops.js'].includes(name))return send(res,404,{error:'NOT_FOUND'});
+        const file=path.join(camDir,name);if(!fs.existsSync(file))return send(res,404,{error:'NOT_FOUND'});
+        res.writeHead(200,{'Content-Type':TYPES[path.extname(name)]||'application/octet-stream','Cache-Control':'no-cache','Permissions-Policy':'camera=(self), microphone=(self), screen-wake-lock=(self), display-capture=()',
+          'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; media-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"});
+        fs.createReadStream(file).pipe(res);return;
+      }
       const session=auth(req);if(!session)return send(res,401,{error:'PAIRING_REQUIRED'});
       if(await workspace.handle(req,res,url,session))return;
       if(p==='/api/mobile/logout'&&req.method==='POST'){sessions.revoke(cookies(req).wm_sid);res.setHeader('Set-Cookie','wm_sid=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');return send(res,200,{ok:true});}
       if(p==='/api/mobile/session'&&req.method==='GET'){
         let online=false,counts={};try{const response=await fetch('http://127.0.0.1:'+upstreamPort+'/health',{signal:AbortSignal.timeout(3000)});const h=await response.json();online=response.ok;counts={effects:Number(h.liveEffects)||0,templates:Number(h.templates)||0};}catch{}
-        return send(res,200,{authenticated:true,local:localRequest(req,port),device:{id:session.id,label:session.label},effectsServer:online,counts,serverTime:Date.now(),stats:{frames:session.frames,bytes:session.bytes,audioTests:session.audioTests,lastFrameAt:frames.get(session.id)?.at||null},platform:{tiktokConnected:workspace.live.state.status==='connected',battlesConnected:workspace.live.state.status==='connected'&&Boolean(workspace.live.state.battle)},version:'1.2.0'});
+        return send(res,200,{authenticated:true,local:localRequest(req,port),device:{id:session.id,label:session.label},effectsServer:online,counts,serverTime:Date.now(),stats:{frames:session.frames,bytes:session.bytes,audioTests:session.audioTests,lastFrameAt:frames.get(session.id)?.at||null},platform:{tiktokConnected:workspace.live.state.status==='connected',battlesConnected:workspace.live.state.status==='connected'&&Boolean(workspace.live.state.battle)},version:VERSION,build:{root:link.build.root,startedAt:link.build.startedAt}});
       }
       if(p==='/api/mobile/frame'&&req.method==='POST'){
         const raw=await body(req,512*1024),mime=String(req.headers['content-type']||'').split(';')[0];
@@ -115,8 +131,9 @@ export function createMobileGateway({port=8801,upstreamPort=8800,clientKey='',ap
     }catch(e){if(!res.headersSent)send(res,e.status||500,{error:e.status?e.message:'REQUEST_FAILED'});else res.end();}
   });
   const cleanup=setInterval(()=>{sessions.prune();for(const[k,v]of frames)if(Date.now()-v.at>30000)frames.delete(k);for(const[k,v]of audio)if(Date.now()-v.at>60000)audio.delete(k);},15000);cleanup.unref();
-  server.on('close',()=>{clearInterval(cleanup);void workspace.close();});
-  return{server,sessions,workspace,setPublicUrl(value){const u=new URL(value);if(u.protocol!=='https:')throw new Error('HTTPS_REQUIRED');publicUrl=u.origin;workspace.setPublicUrl(publicUrl);},getPublicUrl:()=>publicUrl};
+  const closeServer=server.close.bind(server);server.close=callback=>{link.close();return closeServer(callback);}; // the hub answers its parked requests first, so close() never waits for a long poll
+  server.on('close',()=>{clearInterval(cleanup);link.close();void workspace.close();});
+  return{server,sessions,workspace,link,setPublicUrl(value){const u=new URL(value);if(u.protocol!=='https:')throw new Error('HTTPS_REQUIRED');publicUrl=u.origin;workspace.setPublicUrl(publicUrl);},getPublicUrl:()=>publicUrl};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
   const env=loadEnv(),port=Number(process.env.MOBILE_PORT)||8801,app=createMobileGateway({port,upstreamPort:Number(env.PORT)||8800,clientKey:env.STUDIO_CLIENT_KEY||'',apiKey:env.API_TOKEN||'',env});

@@ -33,7 +33,7 @@ export function createWorkspace({root,upstreamPort=8800,apiKey='',clientKey='',e
   async function upstream(route,method='GET',data){const r=await fetch('http://127.0.0.1:'+upstreamPort+route,{method,headers:{'x-api-key':apiKey,'x-key':clientKey,...(data!==undefined?{'Content-Type':'application/json'}:{})},...(data!==undefined?{body:JSON.stringify(data)}:{}),signal:AbortSignal.timeout(20000)});const j=await r.json();if(!r.ok)throw fail('EFFECTS_API_'+r.status,r.status);return j;}
   let publicBase='',working=0;const tickets=new Map(),commands=[];let commandSequence=0;
   const provider=eventProvider(root,env,liveFactory);
-  const live=new LiveEvents({factory:(handle,options)=>provider.create(handle,options),signApiKey:env.SIGN_API_KEY||env.EULER_API_KEY||'',onAutomation:event=>fire(event)});
+  const live=new LiveEvents({env,factory:(handle,options)=>provider.create(handle,options),signApiKey:env.SIGN_API_KEY||env.EULER_API_KEY||'',onAutomation:event=>fire(event)});
   const ruleTimes=new Map();
   function command(recipe){const entry={sequence:++commandSequence,at:Date.now(),recipe};commands.push(entry);if(commands.length>40)commands.shift();return entry;}
   async function fire(event){
@@ -144,5 +144,5 @@ export function createWorkspace({root,upstreamPort=8800,apiKey='',clientKey='',e
     return send(res,404,{error:'WORKSPACE_ROUTE_NOT_FOUND'});
   }
   queueMicrotask(kick);
-  return{handle,publicMedia,config,live,broadcasts,db,setPublicUrl(value){publicBase=value?new URL(value).origin:'';kick();},async close(){await live.disconnect();await broadcasts.close();}};
+  return{handle,publicMedia,config,live,broadcasts,db,setPublicUrl(value){publicBase=value?new URL(value).origin:'';kick();},async close(){await live.disconnect();await live.vardy?.close();await broadcasts.close();}};
 }

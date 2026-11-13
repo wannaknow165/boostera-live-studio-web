@@ -35,6 +35,10 @@
   /* ?clean=1 — CLEAN PROGRAM: only the picture (camera + effects), no panel, for the Studio / virtual camera */
   body.clean { padding:0; background:#000 } body.clean aside { display:none }
   body.clean #stage { height:100vh; width:100vw; border-radius:0 } body.clean #toast { display:none !important }
+  /* ?stage=<url> (clean mode): the wall from the cloud — a web page in an <iframe> as the LOWEST layer: the largest 9:16 box
+     centred in the stage (= full bleed in the Studio's 1080x1920 source). The canvas is positioned so it paints above it. */
+  #stage iframe.wall { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(100%, calc(100vh * 9 / 16)); height:min(100%, calc(100vw * 16 / 9)); border:0; margin:0; padding:0; overflow:hidden; pointer-events:none; background:transparent; display:block }
+  #stage.staged #out { position:relative }
 </style>
 </head>
 <body>
@@ -77,6 +81,7 @@
   </aside>
 <script type="module">
 import { FxEngine } from './fx-engine.js';
+import { stageUrlFor, stageGate, STAGE_TIMEOUT_MS } from './stage-url.js';
 const $ = s => document.querySelector(s);
 const logEl = $('#log'); const log = m => { logEl.textContent = `${new Date().toLocaleTimeString('he-IL')} ${m}\n` + logEl.textContent; console.log(m); };
 const video = $('#src'), out = $('#out');
@@ -87,6 +92,23 @@ setInterval(() => { document.querySelectorAll('button.fx').forEach(b => { if (!f
 const qs = new URLSearchParams(location.search);
 if (qs.get('clean')) document.body.classList.add('clean');
 if (qs.get('streamer')) try { localStorage.setItem('fx-streamer', qs.get('streamer')); } catch {}
+// ?stage=<https url> (clean mode only): the wall from the cloud as the lowest layer — an <iframe> under the canvas. Once it has
+// loaded (and its host really answered: an iframe "loads" the browser's error page too), the camera is drawn as a cut-out
+// (transparent around her) so the wall shows through; remixes, the effect's room and every foreground effect still paint over it.
+// Host down / no such name / not loaded in time -> the iframe goes and the plain camera stays, as before.
+const stageUrl = stageUrlFor(location.search, location.hostname);
+if (stageUrl) {
+  const stageEl = $('#stage'), f = document.createElement('iframe'); f.className = 'wall'; f.title = 'stage'; f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1;
+  f.setAttribute('allow', 'autoplay; fullscreen'); f.setAttribute('scrolling', 'no');
+  const gate = stageGate({
+    onOpen: () => { fx.transparent = true; log('קיר מהענן מאחורי המצלמה: ' + stageUrl); },
+    onClose: why => { f.remove(); stageEl.classList.remove('staged'); fx.transparent = false; log(`הקיר מהענן לא נטען (${why}) — ממשיכים עם המצלמה כרגיל`); },
+  });
+  f.onload = () => gate.loaded(); f.onerror = () => gate.failed('error');
+  fetch(stageUrl, { method: 'HEAD', mode: 'no-cors', cache: 'no-store', signal: AbortSignal.timeout(STAGE_TIMEOUT_MS) }).then(() => gate.reachable(), e => gate.failed('unreachable: ' + e.message));
+  stageEl.classList.add('staged'); f.src = stageUrl; stageEl.prepend(f);
+  window.fxStage = { url: stageUrl, frame: f, gate, get on() { return fx.transparent; } }; // for tests, and for a look from the console
+}
 
 async function useSrc(src) { video.srcObject = null; video.src = src; await video.play(); log('מקור: ' + src); }
 $('#cam').onclick = async () => { video.src = ''; video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: 'user' } }); await video.play(); log('מצלמה פעילה'); };
@@ -100,6 +122,31 @@ async function usePhone() {
   video.src = ''; video.srcObject = c.captureStream(30); await video.play(); log('טלפון מחובר דרך ADB');
 }
 $('#phone').onclick = usePhone;
+// Phone over the mobile gateway (:8801): the PWA on the phone sends its processed video to the server ("שלח וידאו לשרת"),
+// the gateway turns it into HLS, and we play that HLS into the engine's <video> (hls.js, as /mobile/viewer does).
+async function useServer() {
+  const base = `http://${location.hostname === 'localhost' ? 'localhost' : '127.0.0.1'}:8801`;
+  for (let i = 0; i < 100; i++) {
+    try {
+      const r = await fetch(base + '/api/workspace/overview', { cache: 'no-store' }); const d = await r.json();
+      const s = (d.broadcasts || []).filter(b => b.mode === 'preview' && b.state === 'running').sort((a, b) => b.startedAt - a.startedAt)[0];
+      if (s && s.playback) {
+        const url = base + s.playback; const probe = await fetch(url, { cache: 'no-store' });
+        if (probe.ok) {
+          const { default: Hls } = await import('https://cdn.jsdelivr.net/npm/hls.js@1.6.15/+esm');
+          if (window._hls) { window._hls.destroy(); window._hls = null; }
+          video.srcObject = null; video.src = ''; video.muted = true;
+          const h = window._hls = new Hls({ lowLatencyMode: true, liveSyncDurationCount: 2 }); h.loadSource(url); h.attachMedia(video);
+          h.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+          log('מקור: הטלפון דרך השרת (' + s.id.slice(0, 6) + ')'); return;
+        }
+      }
+    } catch (e) { /* gateway not up yet or no stream */ }
+    if (i % 3 === 0) log('ממתין לשידור מהטלפון… (באפליקציה: "שלח וידאו לשרת")');
+    await new Promise(r => setTimeout(r, 3000));
+  }
+  log('לא התקבל שידור מהטלפון');
+}
 $('#plate').onclick = () => fx.capturePlate();
 $('#showpts').onclick = () => { fx.debug = !fx.debug; $('#showpts').textContent = fx.debug ? 'הסתר נקודות' : 'הצג נקודות'; };
 if (qs.get('debug')) fx.debug = true;
@@ -179,6 +226,8 @@ await loadAll(); refreshRemix();
 log('טוען MediaPipe…'); await fx.init(); fx.start();
 // live sources only: phone (ADB) or the computer camera
 if (qs.get('src') === 'phone') usePhone();
+else if (qs.get('src') === 'server') useServer(); // the phone's PWA stream via the mobile gateway (HLS)
+else if (qs.get('src') === 'camera') $('#cam').onclick().catch(e => log('מצלמה: ' + e.message)); // the computer camera, as the button does (before: a file named "camera", i.e. nothing)
 else if (qs.get('src')) useSrc(qs.get('src'));
 log('מוכן');
 window.fxReady = true;

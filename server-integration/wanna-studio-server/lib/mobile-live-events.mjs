@@ -1,3 +1,4 @@
+import {vardyIngestFromEnv} from './vardy-ingest.mjs';
 import {EventEmitter} from 'node:events';
 const str=(v,max=100)=>v==null?'':String(v).slice(0,max);
 const number=v=>Number.isFinite(Number(v))?Number(v):0;
@@ -7,8 +8,9 @@ const score=value=>/^\d+$/.test(String(value??''))?String(value):'0';
 function battleScores(value){return entries(value).map(a=>{const v=a.value||a;return{id:str(a.key??v.anchorIdStr??v.hostUserId??v.userId),score:score(v.hostscore??v.score??v.totalScore??v.points??v.battlePoints),contributors:(v.userArmies||v.users||v.contributors||[]).slice(0,10).map(u=>({...person(u.user||u),id:str(u.userIdStr||u.userId||u.user?.id),score:score(u.score??u.points)}))};});}
 function timing(settings={}){const start=number(settings.startTimeMs)||(number(settings.startTime)*1000),end=number(settings.endTimeMs)||(number(settings.endTime)*1000);return{startTimeMs:start,endTimeMs:end||(start&&number(settings.duration)?start+number(settings.duration)*1000:0),duration:number(settings.duration)};}
 export class LiveEvents extends EventEmitter{
-  constructor({factory,signApiKey='',onAutomation=async()=>{}}={}){
+  constructor({factory,signApiKey='',onAutomation=async()=>{},env={},vardy=null}={}){
     super();this.factory=factory;this.signApiKey=signApiKey;this.onAutomation=onAutomation;
+    this.vardy=vardy||vardyIngestFromEnv(env);
     this.client=null;this.generation=0;this.sequence=0;this.seen=new Map();this.listeners=new Set();
     this.state={status:'disconnected',handle:'',roomId:null,viewers:0,likes:0,gifts:0,diamonds:0,follows:0,shares:0,subscribers:0,battle:null,participants:[],supporters:[],events:[],chat:[],lastEventAt:null,error:null};
   }
@@ -29,15 +31,15 @@ export class LiveEvents extends EventEmitter{
         client.on(event,data=>{if(generation===this.generation)try{this.ingest(event,data);}catch{this.state.error='UNRECOGNIZED_EVENT_PAYLOAD';this.publish();}});
       }
       client.on('error',()=>{if(generation===this.generation){this.state.error='TIKTOK_CONNECTION_ERROR';this.publish();}});
-      client.on('disconnected',()=>{if(generation===this.generation){if(this.state.status!=='ended')this.state.status='disconnected';this.publish();}});
-      client.on('streamEnd',()=>{if(generation===this.generation){this.state.status='ended';this.publish();}});
+      client.on('disconnected',()=>{if(generation===this.generation){if(this.state.status!=='ended')this.state.status='disconnected';this.vardy?.sessionEnd({reason:'disconnected'});this.publish();}});
+      client.on('streamEnd',()=>{if(generation===this.generation){this.state.status='ended';this.vardy?.sessionEnd({reason:'stream_end'});this.publish();}});
       const connected=await Promise.race([client.connect(),new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Object.assign(Error('CONNECT_TIMEOUT'),{code:'CONNECT_TIMEOUT'})),20000);})]);
       clearTimeout(timeout);
       if(generation!==this.generation){await client.disconnect();return this.snapshot();}
-      this.state.status='connected';this.state.roomId=str(connected?.roomId||client.roomId);this.state.error=null;return this.publish();
+      this.state.status='connected';this.state.roomId=str(connected?.roomId||client.roomId);this.state.error=null;this.vardy?.sessionStart({roomId:this.state.roomId,handle:this.state.handle});return this.publish();
     }catch(error){clearTimeout(timeout);if(generation===this.generation){++this.generation;this.client=null;this.state.status='error';this.state.error=/not live|offline|not online|isn't online/i.test(error.message+' '+error.name)?'CREATOR_OFFLINE':error.code==='ERR_MODULE_NOT_FOUND'?'CONNECTOR_NOT_INSTALLED':['TIKTOOLS_KEY_REQUIRED','TIKTOOLS_TIMEOUT','TIKTOOLS_PROVIDER_REJECTED','TIKTOOLS_ROOM_MISMATCH','TIKTOOLS_CONNECTION_FAILED','CONNECT_TIMEOUT'].includes(error.code)?error.code:'CONNECTION_FAILED_OR_SIGNING_REQUIRED';this.publish();}if(client)try{await client.disconnect();}catch{}return this.snapshot();}
   }
-  async disconnect(){++this.generation;const client=this.client;this.client=null;if(client)try{await client.disconnect();}catch{}this.state.status='disconnected';return this.publish();}
+  async disconnect(){this.vardy?.sessionEnd({reason:'disconnect'});++this.generation;const client=this.client;this.client=null;if(client)try{await client.disconnect();}catch{}this.state.status='disconnected';return this.publish();}
   ingest(type,data={}){
     const messageId=str(data.common?.msgId||data.msgId);
     const key=messageId?type+':'+messageId:null;
@@ -92,6 +94,6 @@ export class LiveEvents extends EventEmitter{
       this.log(type,{battleId:str(data.battleId),messageType:str(data.msgType),multiplier:[2,3,5].includes(mult)?mult:null});
       if([2,3,5].includes(mult))void Promise.resolve(this.onAutomation({type:'gift_x'+mult,user:this.state.handle,source:'tiktok',battleId:str(data.battleId)})).catch(()=>{});
     }else this.log(type,{user:who,battleId:str(data.battleId),messageType:str(data.msgType)});
-    this.publish();return true;
+    this.vardy?.handle(type,data);this.publish();return true;
   }
 }

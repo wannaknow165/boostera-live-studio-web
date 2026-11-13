@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {loadEnv,ROOT} from './lib/env.mjs';
 import {MobileSessions} from './lib/mobile-session.mjs';
 import {createWorkspace} from './lib/mobile-workspace.mjs';
+import {MobileStudio} from './lib/mobile-studio.mjs';
 const TYPES={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.webmanifest':'application/manifest+json','.png':'image/png','.svg':'image/svg+xml'};
 export function localRequest(req,port){return['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress)&&!req.headers['cf-connecting-ip']&&!req.headers['x-forwarded-for']&&['127.0.0.1:'+port,'localhost:'+port].includes(req.headers.host);}
 function cookies(req){return Object.fromEntries((req.headers.cookie||'').split(';').map(x=>x.trim().split('=')).filter(x=>x[0]));}
@@ -17,9 +18,10 @@ export function validMediaPath(input){
   if(!/^\/(fx\/(fx-engine\.js|head-tomato\.js|opponent\.js|battle-stage\.js|assets\/|effects\/)|media\/)/.test(input))return false;
   return/\.(js|mjs|json|mp4|webm|mov|png|jpe?g|webp|svg|mp3|wav|glb|gltf|bin|task|tflite|wasm)$/i.test(input);
 }
-export function createMobileGateway({port=8801,upstreamPort=8800,clientKey='',apiKey='',env={},workspaceRoot=ROOT,workspaceOptions={},sessions=new MobileSessions()}={}){
+export function createMobileGateway({port=8801,upstreamPort=8800,studioPort=47831,clientKey='',apiKey='',env={},workspaceRoot=ROOT,workspaceOptions={},sessions=new MobileSessions()}={}){
   const mobileDir=path.join(ROOT,'public','mobile'),frames=new Map(),audio=new Map();let publicUrl='';
   const workspace=createWorkspace({root:workspaceRoot,upstreamPort,apiKey,clientKey,env,...workspaceOptions});
+  const studio=new MobileStudio({port:studioPort});
   const localSession={id:'local-desktop',label:'המחשב',frames:0,bytes:0,audioTests:0};
   const send=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
   function auth(req){return localRequest(req,port)?localSession:sessions.get(cookies(req).wm_sid);}
@@ -43,6 +45,7 @@ export function createMobileGateway({port=8801,upstreamPort=8800,clientKey='',ap
       if(['POST','PUT','DELETE'].includes(req.method)&&!sameOrigin(req))return send(res,403,{error:'ORIGIN_REJECTED'});
       if(req.method==='OPTIONS'){res.writeHead(405);return res.end();}
       if(await workspace.publicMedia(req,res,url))return;
+      if(await studio.handle(req,res,url,auth(req),jsonBody))return;
       if(p==='/'){res.writeHead(302,{Location:'/mobile/'});return res.end();}
       if(p==='/api/mobile/pairing-code'&&req.method==='POST'){
         if(!localRequest(req,port))return send(res,403,{error:'LOCAL_SETUP_ONLY'});

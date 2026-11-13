@@ -1,1 +1,21 @@
-<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>הבוקס שלי</title><link rel="stylesheet" href="/mobile/app.css"><script type="module" src="/mobile/box.js"></script></head><body><main><section class="card"><p class="eyebrow">CLIENT BROADCAST BOX</p><h1>הבוקס שלי</h1><p id="status" role="status">בודק חיבור…</p><div class="actions"><a class="button primary" href="/mobile/">מצלמה, אפקטים וצ׳אט</a><a class="button primary" href="/mobile/manage">מנהל הבוקס</a><a class="button subtle" href="/mobile/pair" id="pair" hidden>חיבור טלפון</a><a class="button subtle" href="http://127.0.0.1:47831/" id="studio" hidden>פקדי Studio ובאטלים במחשב</a></div><p>המנהל כולל לקוחות, מדיה, אפקטים אישיים, אוטומציות, חיבור אירועים ויעד שידור.</p><p id="detail"></p><p>לפני שידור יש לוודא שהמצלמה והאודיו מגיעים ל־Studio ושהחשבון הנכון מחובר. הפעלת הבוקס אינה מתחילה לייב.</p></section></main></body></html>
+<!doctype html>
+<html lang="he" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>הבוקס שלי</title><link rel="stylesheet" href="/mobile/app.css"><script type="module" src="/mobile/box.js"></script></head>
+<body class="box-page"><main>
+<section class="card">
+  <p class="eyebrow">CLIENT BROADCAST BOX</p><h1>הבוקס שלי</h1>
+  <p id="status" role="status">בודק חיבור…</p>
+  <div class="actions"><a class="button primary" href="/mobile/">מצלמה, אפקטים וצ׳אט</a><a class="button primary" href="/mobile/manage">מנהל הבוקס</a><button class="button primary" id="connect-studio" type="button" aria-expanded="false" aria-controls="studio-account">חיבור TikTok Studio</button><a class="button subtle" href="/mobile/pair" id="pair" hidden>חיבור טלפון</a><a class="button subtle" href="/mobile/studio" id="studio">פקדי Studio ובאטלים</a></div>
+  <p>המנהל כולל לקוחות, מדיה, אפקטים אישיים, אוטומציות, חיבור אירועים ויעד שידור.</p><p id="detail"></p>
+</section>
+<section class="card" id="studio-account" hidden>
+  <h2>חשבון TikTok בבוקס שלי</h2>
+  <p id="account-status" role="status" aria-live="polite">בודק את החיבור ל־Studio…</p>
+  <p id="account-name" hidden dir="auto"></p>
+  <a class="button primary" id="account-approve" target="_blank" rel="noopener noreferrer" hidden>פתיחת האישור ב־TikTok</a>
+  <img id="account-qr" alt="קוד QR מקורי של TikTok LIVE Studio לחיבור החשבון" width="240" height="240" hidden>
+  <p id="account-help">החיבור הראשוני מתבצע באישור שלך ב־TikTok. ההתחברות נשמרת ב־Studio שבבוקס שלך.</p>
+  <div class="actions"><button class="button subtle" id="account-refresh" type="button" hidden>יצירת QR חדש</button><button class="button subtle" id="account-check" type="button">בדיקת חיבור</button></div>
+</section>
+<section class="card"><p>לפני שידור יש לוודא שהמצלמה והאודיו מגיעים ל־Studio ושהחשבון הנכון מחובר. פתיחת הפאנל וחיבור החשבון אינם מתחילים לייב.</p></section>
+</main></body></html>

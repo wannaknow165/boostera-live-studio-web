@@ -1,6 +1,10 @@
 'use strict';
 const $=id=>document.getElementById(id);
-const local=location.protocol==='http:'&&['127.0.0.1','localhost'].includes(location.hostname)&&location.port==='47831';
+const direct=location.protocol==='http:'&&['127.0.0.1','localhost'].includes(location.hostname)&&location.port==='47831';
+const hosted=location.pathname==='/mobile/studio'||location.pathname.startsWith('/mobile/studio/');
+const local=direct||hosted;
+const browserFetch=window.fetch.bind(window);
+function controlFetch(route,options){return browserFetch(hosted&&route.startsWith('/api/')?'/api/mobile/studio'+route.slice(4):route,options);}
 let inviteDraft=null,inviteBusy=false;
 let battleControl=null,battleBusy=false,battleLoading=false,battleReceipt=null;
 let phoneLinkBusy=false;
@@ -13,15 +17,27 @@ for(const id of ['help','side-help','setup-action'])$(id).addEventListener('clic
 $('close-help').addEventListener('click',()=>$('help-dialog').close());
 $('help-dialog').addEventListener('click',e=>{if(e.target===$('help-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
 if(local)$('download').hidden=true;
+if(hosted){
+  $('focus').hidden=true;
+  document.querySelector('.connection-title p').textContent='ב־Studio שבבוקס שלך';
+  document.querySelector('footer span:last-child').textContent='החשבון והנתונים מנוהלים בבוקס שלך.';
+  const help=$('help-dialog');
+  help.querySelector('h2').textContent='Studio מחובר לבוקס שלך';
+  help.querySelector('p').textContent='השליטה והחיבור לחשבון מתבצעים מהפאנל בטלפון.';
+  help.querySelector('ol').replaceChildren(...['פתח את הבוקס שלי ובחר חיבור TikTok Studio.','אשר את הכניסה ב־TikTok ובדוק שמופיע החשבון הנכון.','לאחר שהסטודיו מחובר, פקדי ההזמנה והבאטל יופיעו לפי המצב בשידור.'].map(text=>{const li=document.createElement('li');li.textContent=text;return li;}));
+  help.querySelector('pre').hidden=true;help.querySelector('.command-label').hidden=true;
+  help.querySelector('.small-note').textContent='Studio פועל בתוך הבוקס. אם נדרש אישור כניסה נוסף, הוא יופיע באזור חיבור החשבון.';
+  const back=help.querySelector('.dialog-actions a');back.href='/mobile/box';back.textContent='חזרה לבוקס שלי';back.removeAttribute('target');
+}
 async function focusStudio(){
-  if(!local){showHelp();return;}
-  try{const r=await fetch('/api/focus-studio',{method:'POST'}),result=await r.json();toast(result.ok?'עברנו ל־LIVE Studio. פעולות ההזמנה מתבצעות שם.':'פתח את LIVE Studio משורת המשימות.');}catch{toast('המעבר לסטודיו לא זמין כרגע.');}
+  if(!direct){showHelp();return;}
+  try{const r=await controlFetch('/api/focus-studio',{method:'POST'}),result=await r.json();toast(result.ok?'עברנו ל־LIVE Studio. פעולות ההזמנה מתבצעות שם.':'פתח את LIVE Studio משורת המשימות.');}catch{toast('המעבר לסטודיו לא זמין כרגע.');}
 }
 $('focus').addEventListener('click',focusStudio);
 $('refresh').addEventListener('click',async()=>{
   if(!local){showHelp();return;}
   $('refresh').disabled=true;
-  try{await fetch('/api/refresh',{method:'POST'});await update();toast('הנתונים רועננו. רשימות חדשות נטענות מתוך Co-host בסטודיו.');}catch{toast('לא ניתן לרענן כרגע.');}
+  try{await controlFetch('/api/refresh',{method:'POST'});await update();toast('הנתונים רועננו. רשימות חדשות נטענות מתוך Co-host בסטודיו.');}catch{toast('לא ניתן לרענן כרגע.');}
   finally{$('refresh').disabled=false;}
 });
 document.querySelectorAll('[data-tab]').forEach(button=>button.addEventListener('click',()=>{
@@ -77,8 +93,8 @@ function renderCandidates(){
     const action=document.createElement('button');
     const canInvite=state.actions?.invite&&person.inviteAvailable&&!person.linked&&!person.invited;
     action.className='native-button'+(canInvite?' send-invite':'');
-    action.textContent=person.linked?'מחובר':person.invited?'ממתין לאישור':canInvite?'שלח הזמנה':'ביצוע בסטודיו ↗';
-    action.disabled=Boolean(inviteBusy||person.linked||person.invited);
+    action.textContent=person.linked?'מחובר':person.invited?'ממתין לאישור':canInvite?'שלח הזמנה':hosted?'לא זמין כרגע':'ביצוע בסטודיו ↗';
+    action.disabled=Boolean(inviteBusy||person.linked||person.invited||hosted&&!canInvite);
     action.title=canInvite?'שליחת הזמנת Co-host מהחשבון שלך':'פעולה זו אינה זמינה כרגע מהפאנל';
     action.addEventListener('click',()=>canInvite?beginInvite(person):focusStudio());row.append(action);container.append(row);
   }
@@ -118,14 +134,14 @@ function render(){
   set('updated',state.observedAt?'עודכן '+time(state.observedAt):state.lastObservedAt?'עדכון אחרון '+time(state.lastObservedAt):'טרם התקבל עדכון');
   $('setup-banner').hidden=Boolean(connected);
   set('setup-title',local?'ממתינים ל־LIVE Studio':'הפאנל החי פועל במחשב שלך');
-  set('setup-copy',local?'פתח את הסטודיו עם אפשרות החיבור והשאר אותו פועל. הפאנל יתחבר אוטומטית.':'פתח את המחבר במחשב שבו LIVE Studio מותקן. אפשר להוריד אותו מכאן.');
+  set('setup-copy',hosted?'Studio בבוקס עדיין אינו מחובר. בדוק את חיבור החשבון דרך הבוקס שלי.':local?'פתח את הסטודיו עם אפשרות החיבור והשאר אותו פועל. הפאנל יתחבר אוטומטית.':'פתח את המחבר במחשב שבו LIVE Studio מותקן. אפשר להוריד אותו מכאן.');
   set('list-hint',state.coverage?.truncated?'מוצגת רשימה חלקית כפי שסופקה על ידי הסטודיו.':'הרשימות משקפות את מה שנטען ב־Friends וב־Suggested creators בתוך Co-host.');
   renderStage();renderCandidates();renderEvents();
 }
 async function update(){
   if(!local||busy)return;busy=true;const version=++requestVersion;
   try{
-    const response=await fetch('/api/state',{cache:'no-store',signal:AbortSignal.timeout(4500)});
+    const response=await controlFetch('/api/state',{cache:'no-store',signal:AbortSignal.timeout(4500)});
     if(!response.ok)throw new Error('CONNECTION_ERROR');
     const next=await response.json();if(version===requestVersion)state=next;
   }catch{state={...state,connected:false,live:false,candidates:[],operations:[],battle:null,lastObservedAt:state.observedAt,observedAt:null};}
@@ -147,7 +163,7 @@ const inviteErrors={
   AMBIGUOUS_NATIVE_TARGET:'לא זוהה כפתור הזמנה יחיד ליוצר. לא נשלחה הזמנה.',
 };
 async function inviteRequest(route,body){
-  const response=await fetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
+  const response=await controlFetch(route,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
   const result=await response.json();if(!response.ok)throw new Error(result.error||'INVITE_FAILED');return result;
 }
 function closeInvite(){if(!inviteBusy){inviteDraft=null;$('invite-dialog').close();}}
@@ -200,7 +216,7 @@ function renderBattleControls(){
 async function updateBattleControls(){
   if(!local||battleLoading||battleBusy)return;battleLoading=true;
   try{
-    const response=await fetch('/api/battles',{cache:'no-store',signal:AbortSignal.timeout(7000)});
+    const response=await controlFetch('/api/battles',{cache:'no-store',signal:AbortSignal.timeout(7000)});
     if(!response.ok)throw new Error();const next=await response.json();
     if(next.revision!==battleControl?.revision)battleReceipt=null;
     battleControl=next;
@@ -220,7 +236,7 @@ async function performBattleAction(action){
 async function updatePhoneLink(){
   if(!local||phoneLinkBusy)return;
   try{
-    const response=await fetch('/api/phone',{cache:'no-store',signal:AbortSignal.timeout(4500)});
+    const response=await controlFetch('/api/phone',{cache:'no-store',signal:AbortSignal.timeout(4500)});
     if(!response.ok)throw new Error();const p=await response.json();
     set('phone-link-status',!p.received?'פתח את BOOSTERA בטלפון וצור חדר TikTok. הפרטים יתקבלו כאן.':!p.fresh?'פרטי החדר התקבלו בעבר. רענן את החיבור מהטלפון לפני שידור חדש.':!p.imported?'החדר התקבל מהטלפון. אפשר לחבר אותו למנוע השידור.':p.sameStudioRoom?'השידור ופקדי הבאטל מחוברים לאותו חדר.':'יעד השידור חובר. פקדי הבאטל ממתינים לחיבור Studio לאותו חדר.');
     $('phone-link-import').disabled=!p.received||!p.fresh;
@@ -236,7 +252,7 @@ $('phone-link-import').addEventListener('click',async()=>{
 });
 $('phone-link-unlink').addEventListener('click',async()=>{
   if(phoneLinkBusy)return;phoneLinkBusy=true;$('phone-link-unlink').disabled=true;
-  try{const r=await fetch('/api/phone',{method:'DELETE'});if(!r.ok)throw Error();toast('חדר הטלפון נותק. הפאנל יפעל מול החשבון המחובר ב־Studio.');}
+  try{const r=await controlFetch('/api/phone',{method:'DELETE'});if(!r.ok)throw Error();toast('חדר הטלפון נותק. הפאנל יפעל מול החשבון המחובר ב־Studio.');}
   catch{toast('לא ניתן לנתק את החדר. יש לוודא שאין שידור RTMP פעיל.');}
   finally{phoneLinkBusy=false;$('phone-link-unlink').disabled=false;void updatePhoneLink();void updateBattleControls();}
 });

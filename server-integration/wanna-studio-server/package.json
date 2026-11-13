@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node start-mobile.mjs",
-    "test": "node --test test/mobile.test.mjs test/workspace.test.mjs test/live-events.test.mjs test/tiktools.test.mjs test/stage-url.test.mjs test/vardy-ingest.test.mjs test/generation.test.mjs test/broadcast.test.mjs test/rtmp-import.test.mjs",
+    "test": "node --test test/mobile.test.mjs test/mobile-studio.test.mjs test/workspace.test.mjs test/live-events.test.mjs test/tiktools.test.mjs test/stage-url.test.mjs test/vardy-ingest.test.mjs test/generation.test.mjs test/broadcast.test.mjs test/rtmp-import.test.mjs",
     "test:browser": "node test/run-browser.mjs"
   },
   "dependencies": {

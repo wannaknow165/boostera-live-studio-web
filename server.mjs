@@ -11,6 +11,7 @@ import {NativeUi} from './src/native-ui.mjs';
 import {InviteController} from './src/invites.mjs';
 import {BattleController,NativeBattleUi} from './src/battles.mjs';
 import {PhoneLink} from './src/phone-link.mjs';
+import {StudioAccount,NativeStudioLoginUi} from './src/studio-account.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
 const assets=new Map([['/',['index.html','text/html; charset=utf-8']],['/app.js',['app.js','text/javascript; charset=utf-8']],['/style.css',['style.css','text/css; charset=utf-8']]]);
 export function requestAllowed(req,port,token,api=true){
@@ -21,7 +22,7 @@ export function requestAllowed(req,port,token,api=true){
   if(!api)return true;
   return(req.headers.cookie||'').split(';').some(c=>c.trim()==='boostera_session='+token);
 }
-export function createApp({port=47831,service=new RpcClient(9225),polling=true,focus=focusStudio,nativeUi=new NativeUi(),battleUi=new NativeBattleUi(),phoneLink=null}={}){
+export function createApp({port=47831,service=new RpcClient(9225),polling=true,focus=focusStudio,nativeUi=new NativeUi(),battleUi=new NativeBattleUi(),loginUi=new NativeStudioLoginUi(),phoneLink=null}={}){
   const token=crypto.randomBytes(32).toString('hex');
   let state={connected:false,live:false,candidates:[],operations:[],battle:null,events:[],error:'CONNECTING'};
   let running=false,lastCandidatesAt=0,batches={},batchEpoch,self=null,lastUserAt=0;
@@ -30,6 +31,7 @@ export function createApp({port=47831,service=new RpcClient(9225),polling=true,f
   const roomGuard=roomId=>phoneLink?.assertRoom(roomId);
   const invites=new InviteController({service,ui:nativeUi,getState:()=>state,roomGuard});
   const battles=new BattleController({service,ui:battleUi,roomGuard});
+  const account=new StudioAccount({ui:loginUi,getState:()=>state});
   async function poll(){
     if(running)return;
     running=true;
@@ -67,6 +69,11 @@ export function createApp({port=47831,service=new RpcClient(9225),polling=true,f
     if(url.pathname.startsWith('/api/')){
       if(!requestAllowed(req,port,token))return send(401,{error:'OPEN_PANEL_FIRST'});
       if(url.pathname==='/api/state'&&req.method==='GET')return send(200,state);
+      if(url.pathname==='/api/account'&&req.method==='GET')return send(200,await account.state());
+      if(url.pathname==='/api/account/refresh'&&req.method==='POST'){
+        try{await readJson(req);return send(200,await account.refresh());}
+        catch(error){return send(error.status||409,{error:['LIVE_ACCOUNT_CHANGE_BLOCKED','QR_REFRESH_NOT_AVAILABLE'].includes(error.message)?error.message:'STUDIO_LOGIN_UNAVAILABLE'});}
+      }
       if(url.pathname==='/api/phone'&&req.method==='GET')return send(200,phoneLink?await phoneLink.state(state.session?.roomId):{configured:false,error:'PHONE_LINK_NOT_CONFIGURED'});
       if(url.pathname==='/api/phone/import'&&req.method==='POST'){
         try{if(!phoneLink)throw new Error('PHONE_LINK_NOT_CONFIGURED');return send(200,await phoneLink.importTarget());}
